@@ -1,0 +1,625 @@
+/* =====================================================
+   SMART INFUS — STYLESHEET
+   Tema: Biru + Gradasi Orange-Merah
+   ===================================================== */
+
+/* ===== FONT ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --blue-dark:    #0d2b6e;
+  --blue-mid:     #1a4db5;
+  --blue-light:   #2563eb;
+  --blue-soft:    #dbeafe;
+
+  --orange:       #f97316;
+  --orange-dark:  #ea580c;
+  --red:          #ef4444;
+  --red-dark:     #dc2626;
+
+  --gradient-main:   linear-gradient(135deg, #0d2b6e 0%, #1a4db5 50%, #2563eb 100%);
+  --gradient-accent: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+  --gradient-warm:   linear-gradient(135deg, #f97316 0%, #dc2626 100%);
+
+  --bg-page:    #f0f4ff;
+  --bg-card:    #ffffff;
+  --text-main:  #1e293b;
+  --text-muted: #64748b;
+  --border:     #e2e8f0;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 16px rgba(13,43,110,.12);
+  --shadow-lg: 0 8px 32px rgba(13,43,110,.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-page);
+  color: var(--text-main);
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: var(--blue-mid); border-radius: 3px; }
+
+/* =====================================================
+   NAVBAR
+   ===================================================== */
+
+.navbar-custom {
+  background: var(--gradient-main);
+  box-shadow: var(--shadow-lg);
+  padding: 0.6rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.brand-icon {
+  width: 38px;
+  height: 38px;
+  background: var(--gradient-accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(249,115,22,.4);
+}
+
+.bg-success-soft {
+  background: rgba(34,197,94,.15);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,.3);
+}
+
+/* =====================================================
+   STAT CARDS (TOP)
+   ===================================================== */
+
+.stat-card {
+  border-radius: 16px;
+  padding: 1.25rem 1rem;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  transition: transform .2s, box-shadow .2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.1);
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  right: 10px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+}
+
+.stat-blue   { background: var(--gradient-main); }
+.stat-green  { background: linear-gradient(135deg, #059669 0%, #10b981 100%); }
+.stat-orange { background: var(--gradient-accent); }
+.stat-red    { background: var(--gradient-warm); }
+.stat-purple { background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); }
+
+.stat-icon {
+  font-size: 1.6rem;
+  opacity: .85;
+  margin-bottom: .4rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: .25rem;
+}
+
+.stat-label {
+  font-size: .75rem;
+  opacity: .85;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+/* pulse untuk nurse call aktif */
+.pulse-alert {
+  animation: pulseCard 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseCard {
+  0%, 100% { box-shadow: var(--shadow-md); }
+  50%       { box-shadow: 0 0 0 8px rgba(239,68,68,.25), var(--shadow-md); }
+}
+
+/* =====================================================
+   SECTION TITLE
+   ===================================================== */
+
+.section-title {
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--blue-dark);
+  border-left: 4px solid var(--orange);
+  padding-left: .75rem;
+}
+
+/* =====================================================
+   INFUS CARD
+   ===================================================== */
+
+.infus-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  transition: transform .2s, box-shadow .2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.infus-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.infus-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-main);
+  border-radius: 16px 16px 0 0;
+}
+
+.infus-card.nurse-active {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px rgba(239,68,68,.3), var(--shadow-md);
+  animation: nurseGlow 1.5s ease-in-out infinite;
+}
+
+.infus-card.nurse-active::before {
+  background: var(--gradient-warm);
+}
+
+@keyframes nurseGlow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(239,68,68,.3), var(--shadow-md); }
+  50%       { box-shadow: 0 0 0 6px rgba(239,68,68,.2), var(--shadow-lg); }
+}
+
+.infus-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: .75rem;
+}
+
+.infus-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+
+.infus-card-sub {
+  font-size: .75rem;
+  color: var(--text-muted);
+  margin-top: .15rem;
+}
+
+.pasien-info {
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-bottom: .75rem;
+  padding: .4rem .6rem;
+  background: var(--blue-soft);
+  border-radius: 8px;
+}
+
+/* ===== PROGRESS ===== */
+
+.volume-section {
+  margin-bottom: .75rem;
+}
+
+.volume-label {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.volume-value {
+  font-size: .8rem;
+  color: var(--text-muted);
+}
+
+.progress-custom {
+  height: 12px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-bar-custom {
+  height: 100%;
+  border-radius: 6px;
+  transition: width .6s ease;
+  position: relative;
+}
+
+.bar-green  { background: linear-gradient(90deg, #059669, #10b981); }
+.bar-orange { background: var(--gradient-accent); }
+.bar-red    { background: var(--gradient-warm); animation: blinkBar 1s ease-in-out infinite; }
+
+@keyframes blinkBar {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .6; }
+}
+
+/* ===== STATS ROW ===== */
+
+.stats-row {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: .75rem;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+  padding: .5rem .25rem;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.stat-item-icon {
+  font-size: 1rem;
+  margin-bottom: .2rem;
+}
+
+.stat-item-value {
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.2;
+}
+
+.stat-item-label {
+  font-size: .65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* ===== LAST UPDATE ===== */
+
+.last-update {
+  font-size: .7rem;
+  color: var(--text-muted);
+  margin-bottom: .75rem;
+}
+
+/* ===== CARD ACTIONS ===== */
+
+.card-actions {
+  display: flex;
+  gap: .5rem;
+}
+
+/* =====================================================
+   CARD CUSTOM (generic)
+   ===================================================== */
+
+.card-custom {
+  background: var(--bg-card);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* =====================================================
+   BADGES
+   ===================================================== */
+
+.bg-primary-soft {
+  background: var(--blue-soft) !important;
+  color: var(--blue-mid) !important;
+}
+
+.bg-info-soft {
+  background: #e0f2fe !important;
+  color: #0284c7 !important;
+}
+
+.blink-badge {
+  animation: blinkBadge .8s ease-in-out infinite;
+}
+
+@keyframes blinkBadge {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .4; }
+}
+
+/* =====================================================
+   TABLE
+   ===================================================== */
+
+.table thead th {
+  background: var(--gradient-main);
+  color: #fff;
+  font-size: .8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border: none;
+  padding: .75rem 1rem;
+}
+
+.table tbody td {
+  font-size: .85rem;
+  vertical-align: middle;
+  padding: .65rem 1rem;
+  border-color: var(--border);
+}
+
+.table-hover tbody tr:hover {
+  background: #f8faff;
+}
+
+/* =====================================================
+   DETAIL PAGE
+   ===================================================== */
+
+.detail-header {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  border-left: 5px solid var(--blue-mid);
+}
+
+.device-avatar {
+  width: 56px;
+  height: 56px;
+  background: var(--gradient-main);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
+}
+
+/* =====================================================
+   EMPTY STATE
+   ===================================================== */
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: var(--bg-card);
+  border-radius: 16px;
+  border: 2px dashed var(--border);
+}
+
+/* =====================================================
+   BUTTONS
+   ===================================================== */
+
+.btn-primary {
+  background: var(--gradient-main);
+  border: none;
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1a4db5 0%, #2563eb 100%);
+  border: none;
+}
+
+.btn-xs {
+  padding: .2rem .45rem;
+  font-size: .75rem;
+  border-radius: 6px;
+}
+
+/* =====================================================
+   FOOTER
+   ===================================================== */
+
+.footer-custom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--gradient-main);
+  color: rgba(255,255,255,.8);
+  font-size: .75rem;
+  padding: .5rem 0;
+  display: flex;
+  align-items: center;
+  z-index: 999;
+}
+
+.footer-custom .container-fluid {
+  display: flex;
+  align-items: center;
+}
+
+/* =====================================================
+   BREADCRUMB
+   ===================================================== */
+
+.breadcrumb {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-size: .85rem;
+}
+
+.breadcrumb-item a {
+  color: var(--blue-mid);
+  text-decoration: none;
+}
+
+.breadcrumb-item.active {
+  color: var(--text-muted);
+}
+
+/* =====================================================
+   FORM
+   ===================================================== */
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--blue-light);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+}
+
+/* =====================================================
+   RESPONSIVE
+   ===================================================== */
+
+@media (max-width: 576px) {
+  .stat-value { font-size: 1.5rem; }
+  .infus-card { padding: 1rem; }
+  .stats-row  { gap: .3rem; }
+  .stat-item-value { font-size: .75rem; }
+}
+
+/* =====================================================
+   NURSE CALL TOAST NOTIFICATION
+   ===================================================== */
+
+#nurse-toast {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 9999;
+  animation: toastSlideIn .35s cubic-bezier(.22,.61,.36,1) forwards;
+  max-width: 360px;
+  width: calc(100vw - 40px);
+}
+
+#nurse-toast.nurse-toast-hide {
+  animation: toastSlideOut .35s ease forwards;
+}
+
+@keyframes toastSlideIn {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes toastSlideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(120%); opacity: 0; }
+}
+
+.nurse-toast-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 60%, #f97316 100%);
+  color: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 8px 32px rgba(220,38,38,.45), 0 2px 8px rgba(0,0,0,.2);
+  border: 1px solid rgba(255,255,255,.15);
+  animation: toastPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes toastPulse {
+  0%, 100% { box-shadow: 0 8px 32px rgba(220,38,38,.45), 0 2px 8px rgba(0,0,0,.2); }
+  50%       { box-shadow: 0 8px 40px rgba(220,38,38,.75), 0 2px 12px rgba(0,0,0,.3); }
+}
+
+.nurse-toast-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+  animation: bellShake 0.6s ease-in-out infinite;
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0deg); }
+  15%       { transform: rotate(18deg); }
+  30%       { transform: rotate(-16deg); }
+  45%       { transform: rotate(12deg); }
+  60%       { transform: rotate(-10deg); }
+  75%       { transform: rotate(6deg); }
+}
+
+.nurse-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.nurse-toast-title {
+  font-size: .85rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .9;
+  margin-bottom: 2px;
+}
+
+.nurse-toast-msg {
+  font-size: .95rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.nurse-toast-close {
+  background: rgba(255,255,255,.2);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: .85rem;
+  transition: background .15s;
+}
+
+.nurse-toast-close:hover {
+  background: rgba(255,255,255,.35);
+}
