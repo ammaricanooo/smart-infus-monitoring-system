@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS `settings` (
 
 -- Data default settings
 INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
+  ('wa_api_url',          ''),
+  ('wa_api_key',          ''),
   ('fonnte_token',        ''),
   ('wa_nurse_call_msg',   'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
   ('wa_low_volume_msg',   'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.');

@@ -14,23 +14,10 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
-// ===== FORMAT TANGGAL =====
-function formatDate(dateStr) {
-  if (!dateStr) return 'Belum ada data';
-  const d  = new Date(dateStr);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${dd}/${mm}/${yy} ${hh}:${mi}:${ss}`;
-}
-
-// ===== FORMAT WAKTU SINGKAT =====
+// ===== FORMAT TANGGAL WAKTU =====
 function formatTime(dateStr) {
   if (!dateStr) return '--:--:--';
-  const d  = new Date(dateStr);
+  const d   = new Date(dateStr);
   const hh = String(d.getHours()).padStart(2, '0');
   const mi = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
@@ -53,9 +40,8 @@ function escHtml(str) {
 }
 
 // =====================================================
-// ===== NURSE CALL ALERT SYSTEM ===================
+// ===== NURSE CALL ALERT SYSTEM =======================
 // =====================================================
-
 const nurseActiveSet = new Set();
 let audioCtx = null;
 
@@ -144,7 +130,7 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// ===== TOAST NOTIFIKASI =====
+// ===== TOAST NOTIFIKASI NURSE CALL =====
 function showNurseToast(pasienName, lokasi, deviceId) {
   const old = document.getElementById('nurse-toast');
   if (old) old.remove();
@@ -153,24 +139,26 @@ function showNurseToast(pasienName, lokasi, deviceId) {
 
   const toast = document.createElement('div');
   toast.id = 'nurse-toast';
+  // Menyesuaikan style dengan elemen toast Tailwind CSS modern
   toast.innerHTML = `
-    <div class="fixed bottom-6 left-6 right-6 sm:left-auto sm:right-6 sm:w-80 z-50 p-4 bg-red-50 border border-red-200 rounded-lg shadow-lg">
+    <div class="fixed bottom-6 left-6 right-6 sm:left-auto sm:right-6 sm:w-85 z-50 p-4 bg-red-50 border border-red-200 rounded-2xl shadow-xl shadow-red-900/10 transition-all duration-300 transform translate-y-0">
       <div class="flex items-start gap-3">
-        <div class="text-red-600 text-2xl flex-shrink-0">
-          <i class="bi bi-bell-fill"></i>
+        <div class="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-md shadow-red-500/20">
+          <i class="bi bi-bell-fill text-sm"></i>
         </div>
         <div class="flex-1">
-          <div class="font-bold text-red-800">🚨 NURSE CALL</div>
-          <div class="text-red-700 text-sm mt-1">
-            <strong>${escHtml(pasienName)}</strong> membutuhkan bantuan!
+          <div class="text-[10px] font-black tracking-wider text-red-600 uppercase">Emergency Alert</div>
+          <div class="text-sm font-extrabold text-slate-900 mt-0.5">
+            <strong>${escHtml(pasienName)}</strong>
           </div>
-          <div class="text-red-600 text-xs mt-1 flex items-center gap-1">
+          <div class="text-xs text-slate-600 font-medium mt-0.5">Memerlukan bantuan perawat segera!</div>
+          <div class="text-[11px] text-red-600 font-bold mt-2 flex items-center gap-1">
             <i class="bi bi-geo-alt-fill"></i>
             <span>${escHtml(lokasiLabel)}</span>
           </div>
         </div>
-        <button class="text-red-400 hover:text-red-600" onclick="dismissNurseToast()">
-          <i class="bi bi-x-lg"></i>
+        <button class="text-slate-400 hover:text-slate-600 transition-colors p-1" onclick="dismissNurseToast()">
+          <i class="bi bi-x-lg text-xs"></i>
         </button>
       </div>
     </div>
@@ -185,7 +173,7 @@ function showNurseToast(pasienName, lokasi, deviceId) {
 function dismissNurseToast() {
   const t = document.getElementById('nurse-toast');
   if (t) {
-    t.classList.add('opacity-0', 'transition-opacity');
+    t.classList.add('opacity-0', 'translate-y-2');
     setTimeout(() => t.remove(), 400);
   }
 }
@@ -209,8 +197,6 @@ function handleNurseCallState(deviceId, nurseCall, pasienName, lokasi) {
 // =====================================================
 // ===== LOW VOLUME TTS ALERT (0 < vol <= 10ml) ========
 // =====================================================
-
-// Simpan state per device agar tidak spam TTS
 const lowVolAlertedSet = new Set();
 
 function handleLowVolumeAlert(deviceId, volumeSisa, pasienName, lokasi) {
@@ -224,7 +210,6 @@ function handleLowVolumeAlert(deviceId, volumeSisa, pasienName, lokasi) {
       showLowVolumeToast(pasienName, lokasi, vol, deviceId);
     }
   } else {
-    // reset jika sudah diisi ulang / volume normal
     lowVolAlertedSet.delete(key);
   }
 }
@@ -258,23 +243,24 @@ function showLowVolumeToast(pasienName, lokasi, vol, deviceId) {
   const toast = document.createElement('div');
   toast.id = toastId;
   toast.innerHTML = `
-    <div class="fixed top-6 right-6 w-80 z-50 p-4 bg-orange-50 border border-orange-300 rounded-xl shadow-xl">
+    <div class="fixed top-20 right-6 w-85 z-50 p-4 bg-amber-50 border border-amber-200 rounded-2xl shadow-xl shadow-amber-900/5 transition-all duration-300">
       <div class="flex items-start gap-3">
-        <div class="text-orange-500 text-2xl flex-shrink-0">
-          <i class="bi bi-droplet-half"></i>
+        <div class="w-10 h-10 bg-amber-500 text-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-md shadow-amber-500/20">
+          <i class="bi bi-droplet-half text-sm"></i>
         </div>
         <div class="flex-1">
-          <div class="font-black text-orange-800 text-sm">⚠️ VOLUME KRITIS</div>
-          <div class="text-orange-700 text-xs mt-1">
-            <strong>${escHtml(pasienName)}</strong> — sisa <strong>${Math.round(vol)} ml</strong>. Segera ganti!
+          <div class="text-[10px] font-black tracking-wider text-amber-600 uppercase">Volume Warning</div>
+          <div class="text-sm font-extrabold text-slate-900 mt-0.5">
+            <strong>${escHtml(pasienName)}</strong>
           </div>
-          <div class="text-orange-600 text-xs mt-1 flex items-center gap-1">
+          <div class="text-xs text-slate-600 font-medium mt-0.5">Cairan kritis sisa <span class="text-red-500 font-bold">${Math.round(vol)} ml</span></div>
+          <div class="text-[11px] text-amber-700 font-bold mt-2 flex items-center gap-1">
             <i class="bi bi-geo-alt-fill"></i>
             <span>${escHtml(lokasiLabel)}</span>
           </div>
         </div>
-        <button class="text-orange-400 hover:text-orange-600 text-xs" onclick="document.getElementById('${toastId}').remove()">
-          <i class="bi bi-x-lg"></i>
+        <button class="text-slate-400 hover:text-slate-600 transition-colors p-1" onclick="document.getElementById('${toastId}').remove()">
+          <i class="bi bi-x-lg text-xs"></i>
         </button>
       </div>
     </div>
@@ -283,14 +269,13 @@ function showLowVolumeToast(pasienName, lokasi, vol, deviceId) {
 
   setTimeout(() => {
     const el = document.getElementById(toastId);
-    if (el) { el.style.opacity = '0'; el.style.transition = 'opacity 0.4s'; setTimeout(() => el.remove(), 400); }
+    if (el) { el.classList.add('opacity-0'); setTimeout(() => el.remove(), 400); }
   }, 12000);
 }
 
 // =====================================================
-// ===== UPDATE CARD ===================================
+// ===== MONITOR CARD LIVE REFLECTION (TAILWIND) =======
 // =====================================================
-
 function updateCard(dev) {
   const card = document.getElementById('card-' + dev.device_id);
   if (!card) return;
@@ -307,98 +292,116 @@ function updateCard(dev) {
   const pasienName = dev.pasien  || card.dataset.pasien  || 'Tidak Diketahui';
   const lokasi     = dev.lokasi  || card.dataset.lokasi  || '';
 
-  // --- top accent bar ---
-  const cardTop = card.querySelector('[data-role="card-top"]');
-  if (cardTop) {
-    cardTop.className = 'device-card-top' + (nurseCall === 1 ? ' danger' : '');
+  // 1. Sinkronisasi Dinamis Bingkai Utama Card (Border & Ring Status)
+  card.className = "border rounded-2xl p-5 relative overflow-hidden shadow-sm flex flex-col justify-between transition-all duration-500 ";
+  if (nurseCall === 1) {
+    card.classList.add('border-red-500', 'ring-4', 'ring-red-500/10', 'bg-red-50/30');
+  } else if (persen <= 20) {
+    card.classList.add('border-amber-400', 'ring-4', 'ring-amber-500/5', 'bg-amber-50/20');
+  } else {
+    card.classList.add('border-slate-200', 'hover:border-slate-300', 'bg-white');
   }
 
-  // --- bottle liquid ---
+  // 2. Animasi Ketinggian Cairan Botol Grafis
   const bottle = card.querySelector('[data-role="bottle-liquid"]');
   if (bottle) {
     bottle.style.height = Math.min(100, Math.max(0, persen)) + '%';
-    bottle.className = 'infusion-liquid transition-all duration-1000';
-    if (persen > 50)       bottle.classList.add('bg-blue-400');
-    else if (persen > 20)  bottle.classList.add('bg-orange-400');
-    else                   bottle.classList.add('bg-red-500', 'animate-pulse');
+    bottle.className = "absolute bottom-0 inset-x-0 transition-all duration-1000 ";
+    if (nurseCall === 1)      bottle.classList.add('bg-red-400');
+    else if (persen <= 20)  bottle.classList.add('bg-amber-400');
+    else                    bottle.classList.add('bg-[#6b2072]/80'); // Ungu Perusahaan
   }
 
-  // --- progress bar ---
+  // 3. Linear Progress Bar
   const bar = card.querySelector('[data-role="progress-bar"]');
   if (bar) {
     bar.style.width = Math.min(100, Math.max(0, persen)) + '%';
-    bar.className = 'h-full rounded-full transition-all duration-500';
-    if (persen > 50)       bar.classList.add('bar-blue');
-    else if (persen > 20)  bar.classList.add('bar-orange');
-    else                   bar.classList.add('bar-red');
+    bar.className = "h-full rounded-full transition-all duration-1000 ";
+    if (nurseCall === 1)      bar.classList.add('bg-red-500');
+    else if (persen <= 20)  bar.classList.add('bg-amber-500');
+    else                    bar.classList.add('bg-[#6b2072]'); // Ungu Perusahaan
   }
 
-  // --- persen text ---
+  // 4. Teks Persentase Angka
   const persenEl = card.querySelector('[data-role="persen-text"]');
   if (persenEl) persenEl.textContent = persen.toFixed(0) + '%';
 
-  // --- low volume warning ---
+  // 5. Elemen Warning Alert Teks Kritis 20%
   const lowEl = card.querySelector('[data-role="low-warning"]');
-  if (lowEl) lowEl.classList.toggle('hidden', persen > 20);
-
-  // --- volume sisa / volume awal ---
-  const volDisplay = card.querySelector('[data-role="volume-display"]');
-  if (volDisplay) volDisplay.textContent = Math.round(volumeSisa);
-  const volSuffix = volDisplay ? volDisplay.nextElementSibling : null;
-  if (volSuffix) volSuffix.textContent = ` / ${Math.round(volumeAwal)} ml`;
-
-  // --- mode badge ---
-  const modeEl = card.querySelector('[data-role="mode-badge"]');
-  if (modeEl) modeEl.textContent = dev.mode || '-';
-
-  // --- TPM ---
-  const tpmEl = card.querySelector('[data-role="tpm-value"]');
-  if (tpmEl) tpmEl.textContent = Math.round(tpm);
-
-  // --- Estimasi ---
-  const estEl = card.querySelector('[data-role="estimasi-value"]');
-  if (estEl) estEl.innerHTML = `<i class="bi bi-clock-history mr-1 text-slate-400"></i>${estJam}j ${estMnt}m`;
-
-  // --- Last update ---
-  const lastEl = card.querySelector('[data-role="last-update"]');
-  if (lastEl) lastEl.innerHTML = `<i class="bi bi-clock-history mr-1"></i>${formatTime(lastUpdate)}`;
-
-  // --- Online badge ---
-  const onlineBadge = card.querySelector('[data-role="online-badge"]');
-  if (onlineBadge) {
-    if (online) {
-      onlineBadge.className = 'inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700';
-      onlineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full mr-1.5 bg-emerald-500"></span>ONLINE';
+  if (lowEl) {
+    if (persen <= 20 && nurseCall !== 1) {
+      lowEl.classList.remove('hidden');
     } else {
-      onlineBadge.className = 'inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-black bg-slate-100 text-slate-500';
-      onlineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full mr-1.5 bg-slate-400"></span>OFFLINE';
+      lowEl.classList.add('hidden');
     }
   }
 
-  // --- Nurse Call badge ---
-  const nurseBadge = card.querySelector('[data-role="nurse-badge"]');
-  if (nurseBadge) nurseBadge.classList.toggle('hidden', nurseCall !== 1);
+  // 6. Teks Sisa Volume / Volume Batas Awal
+  const volDisplay = card.querySelector('[data-role="volume-display"]');
+  if (volDisplay) {
+    volDisplay.textContent = Math.round(volumeSisa);
+    if (volDisplay.nextElementSibling) {
+      volDisplay.nextElementSibling.textContent = '/' + Math.round(volumeAwal) + 'mL';
+    }
+  }
 
-  // --- Nurse Call ring & overlay ---
-  card.classList.toggle('nurse-ring', nurseCall === 1);
-  const overlay = card.querySelector('[data-role="nurse-overlay"]');
-  if (overlay) overlay.classList.toggle('hidden', nurseCall !== 1);
+  // 7. Nilai Kecepatan Tetesan (TPM) & Mode Infus
+  const tpmEl = card.querySelector('[data-role="tpm-value"]');
+  if (tpmEl) tpmEl.textContent = Math.round(tpm);
 
-  // --- Handle nurse call alert ---
+  const modeEl = card.querySelector('[data-role="mode-badge"]');
+  if (modeEl) modeEl.textContent = dev.mode || '-';
+
+  // 8. Teks Estimasi Waktu Berakhir
+  const estEl = card.querySelector('[data-role="estimasi-value"]');
+  if (estEl) estEl.textContent = `${estJam}j ${estMnt}m`;
+
+  // 9. Timestamp Data Terkini Masuk
+  const lastEl = card.querySelector('[data-role="last-update"]');
+  if (lastEl) lastEl.innerHTML = `<i class="bi bi-clock-history"></i> Update: ${formatTime(lastUpdate)}`;
+
+  // 10. Label Kehadiran Jaringan Perangkat (Online / Offline)
+  const onlineBadge = card.querySelector('[data-role="online-badge"]');
+  if (onlineBadge) {
+    onlineBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase border ";
+    if (online) {
+      onlineBadge.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+      onlineBadge.innerHTML = `<span class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>Connected`;
+    } else {
+      onlineBadge.classList.add('bg-slate-100', 'text-slate-500', 'border-slate-200');
+      onlineBadge.innerHTML = `<span class="w-1 h-1 rounded-full bg-slate-400"></span>Offline`;
+    }
+  }
+
+  // 11. Manajemen Tampilan Badge "NURSE CALL" internal di dalam Card
+  let nurseBadge = card.querySelector('[data-role="nurse-badge"]');
+  if (nurseCall === 1) {
+    if (!nurseBadge) {
+      // Jika komponen badge belum ada dari server render, kita buat runtime
+      const containerBadges = onlineBadge.parentElement;
+      nurseBadge = document.createElement('span');
+      nurseBadge.setAttribute('data-role', 'nurse-badge');
+      nurseBadge.className = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold text-white tracking-wider uppercase bg-red-500 animate-medical-pulse";
+      nurseBadge.innerHTML = `<i class="bi bi-bell-fill text-[8px]"></i> NURSE CALL`;
+      containerBadges.appendChild(nurseBadge);
+    }
+  } else {
+    if (nurseBadge) nurseBadge.remove();
+  }
+
+  // Jalankan pipeline deteksi alarm suara bawaan
   handleNurseCallState(dev.device_id, nurseCall, pasienName, lokasi);
-
-  // --- Handle low volume TTS alert (0 < vol <= 10ml) ---
   handleLowVolumeAlert(dev.device_id, volumeSisa, pasienName, lokasi);
 }
 
 // =====================================================
-// ===== UPDATE STAT CARDS ATAS ========================
+// ===== UPDATE PANEL STATUS MATRIKS UTAMA (ATAS) ======
 // =====================================================
-
 function updateTopStats(allData) {
-  let onlineCount = 0;
-  let lowCount    = 0;
-  let nurseCount  = 0;
+  let totalDevices = allData.length;
+  let onlineCount  = 0;
+  let lowCount     = 0;
+  let nurseCount   = 0;
 
   allData.forEach(dev => {
     if (isOnline(dev.created_at))              onlineCount++;
@@ -406,22 +409,45 @@ function updateTopStats(allData) {
     if (parseInt(dev.nurse_call ?? 0) === 1)   nurseCount++;
   });
 
+  const elTotal  = document.getElementById('stat-total');
   const elOnline = document.getElementById('stat-online');
   const elLow    = document.getElementById('stat-low');
   const elNurse  = document.getElementById('stat-nurse');
   const elCard   = document.getElementById('stat-nurse-card');
 
+  if (elTotal)  elTotal.textContent  = totalDevices;
   if (elOnline) elOnline.textContent = onlineCount;
-  if (elLow)    elLow.textContent    = lowCount;
-  if (elNurse)  elNurse.textContent  = nurseCount;
+  
+  if (elLow) {
+    elLow.textContent = lowCount;
+    if (lowCount > 0) {
+      elLow.className = "text-3xl font-extrabold text-amber-500 mt-1";
+    } else {
+      elLow.className = "text-3xl font-extrabold text-slate-900 mt-1";
+    }
+  }
+  
+  if (elNurse) elNurse.textContent = nurseCount;
 
-  if (elCard) elCard.classList.toggle('pulse-danger', nurseCount > 0);
+  // Efek transisi warna penuh pada Card Ringkasan Nurse Call Atas
+  if (elCard) {
+    if (nurseCount > 0) {
+      elCard.className = "border p-5 rounded-2xl shadow-sm flex items-center justify-between transition-all duration-300 bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20";
+      elCard.querySelector('span').className = "text-xs font-bold uppercase tracking-wider text-red-100";
+      elCard.querySelector('.w-12').className = "w-12 h-12 rounded-xl flex items-center justify-center border bg-white/20 border-white/30 text-white animate-bounce";
+      if (elNurse) elNurse.className = "text-3xl font-extrabold mt-1 text-white";
+    } else {
+      elCard.className = "border p-5 rounded-2xl shadow-sm flex items-center justify-between transition-all duration-300 bg-white border-slate-200 text-slate-900";
+      elCard.querySelector('span').className = "text-xs font-bold uppercase tracking-wider text-slate-400";
+      elCard.querySelector('.w-12').className = "w-12 h-12 rounded-xl flex items-center justify-center border bg-red-50 text-red-500 border-red-100";
+      if (elNurse) elNurse.className = "text-3xl font-extrabold mt-1 text-red-500";
+    }
+  }
 }
 
 // =====================================================
-// ===== UPDATE NURSE LOG (REALTIME) ===================
+// ===== KRONOLOGI LOG TABEL REALTIME (PIPELINE) =======
 // =====================================================
-
 async function updateNurseLog() {
   try {
     const res  = await fetch('api/get_nurse_log.php?limit=20&_=' + Date.now(), { cache: 'no-store' });
@@ -435,18 +461,26 @@ async function updateNurseLog() {
     if (countEl) countEl.textContent = json.total;
 
     if (json.data.length === 0) {
-      tbody.innerHTML = '<tr class="log-row"><td colspan="3" class="px-6 py-12 text-center text-[11px] font-bold uppercase opacity-40">Belum ada log</td></tr>';
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="3" class="py-12 text-center text-xs font-bold text-slate-400 tracking-wider uppercase">
+            <i class="bi bi-shield-check text-2xl block text-slate-300 mb-2"></i>
+            Sistem Aman — Belum Ada Log Masuk
+          </td>
+        </tr>`;
       return;
     }
 
     tbody.innerHTML = json.data.map(log => `
-      <tr class="log-row border-t log-divider">
-        <td class="px-6 py-4 text-xs font-bold">${formatTime(log.created_at)}</td>
-        <td class="px-6 py-4">
-          <div class="text-sm font-bold">${escHtml(log.pasien ?? 'Unknown')}</div>
-          <div class="text-[10px] opacity-50 font-medium mt-0.5">${escHtml(log.lokasi ?? '-')}</div>
+      <tr class="hover:bg-slate-50/80 transition-colors">
+        <td class="py-4 px-6 font-bold text-slate-500 tabular-nums">${formatTime(log.created_at)}</td>
+        <td class="py-4 px-6">
+          <div class="font-bold text-slate-900">${escHtml(log.pasien ?? 'Pasien Anonim')}</div>
+          <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+            <i class="bi bi-geo-alt text-[11px]"></i>${escHtml(log.lokasi ?? '-')}
+          </div>
         </td>
-        <td class="px-6 py-4 text-[10px] font-bold opacity-60">${escHtml(log.device_id)}</td>
+        <td class="py-4 px-6 font-semibold text-slate-400 font-mono text-xs">${escHtml(log.device_id)}</td>
       </tr>
     `).join('');
 
@@ -456,9 +490,8 @@ async function updateNurseLog() {
 }
 
 // =====================================================
-// ===== MAIN REFRESH ==================================
+// ===== GLOBAL ENGINE TRIGGER =========================
 // =====================================================
-
 async function refreshAll() {
   try {
     const res  = await fetch('api/get_latest.php?_=' + Date.now(), { cache: 'no-store' });
@@ -471,20 +504,16 @@ async function refreshAll() {
   }
 }
 
-// =====================================================
-// ===== INTERVAL ======================================
-// =====================================================
-
-setInterval(refreshAll,          3000);
-setInterval(updateNurseLog,      3000);   // realtime
+// Polling interval 3 detik standar rumah sakit
+setInterval(refreshAll, 3000);
+setInterval(updateNurseLog, 3000);
 
 refreshAll();
 updateNurseLog();
 
 // =====================================================
-// ===== INISIALISASI VOICES & AUDIO UNLOCK ============
+// ===== UNLOCK AUDIO PERMISSION SECURITY ==============
 // =====================================================
-
 if (window.speechSynthesis) {
   window.speechSynthesis.getVoices();
   window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();

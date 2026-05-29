@@ -1,6 +1,6 @@
 <?php
 // =====================================================
-// HELPER: KIRIM WHATSAPP VIA FONNTE API
+// HELPER: KIRIM WHATSAPP VIA CUSTOM GATEWAY API
 // =====================================================
 
 require_once __DIR__ . '/settings.php';
@@ -13,56 +13,127 @@ require_once __DIR__ . '/settings.php';
  * @return array                  ['success' => bool, 'results' => [...]]
  */
 function sendWhatsApp(string|array $targets, string $message): array {
-    $token = getSetting('fonnte_token', '');
+    $apiUrl      = trim(getSetting('wa_api_url', ''));
+    $apiKey      = trim(getSetting('wa_api_key', ''));
+    $legacyToken = trim(getSetting('fonnte_token', ''));
 
-    if (empty($token)) {
-        return ['success' => false, 'error' => 'Fonnte token belum dikonfigurasi'];
+    $useLegacyFonnte = false;
+    if (empty($apiUrl) || empty($apiKey)) {
+        if (empty($legacyToken)) {
+            return ['success' => false, 'error' => 'WhatsApp API Key belum dikonfigurasi'];
+        }
+        $apiUrl = 'https://api.fonnte.com/send';
+        $apiKey = $legacyToken;
+        $useLegacyFonnte = true;
     }
 
-    // Fonnte menerima multiple target dipisah koma
     if (is_array($targets)) {
-        $targets = array_filter($targets);          // buang yang kosong
+        $targets = array_filter($targets);
         if (empty($targets)) {
             return ['success' => false, 'error' => 'Tidak ada nomor tujuan'];
         }
-        $targetStr = implode(',', $targets);
     } else {
-        $targetStr = trim($targets);
-        if (empty($targetStr)) {
-            return ['success' => false, 'error' => 'Tidak ada nomor tujuan'];
-        }
+        $targets = [trim($targets)];
     }
 
-    $ch = curl_init('https://api.fonnte.com/send');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => [
+    if ($useLegacyFonnte) {
+        $targetStr = implode(',', $targets);
+        $payload = [
             'target'  => $targetStr,
             'message' => $message,
-        ],
-        CURLOPT_HTTPHEADER => [
-            'Authorization: ' . $token,
-        ],
-        CURLOPT_TIMEOUT => 10,
-    ]);
+        ];
+        $headers = ['Authorization: ' . $apiKey];
+        $contentType = 'form';
+    } else {
+        $baseUrl = rtrim($apiUrl, '/');
+        $endpoint = count($targets) > 1 ? '/send-bulk' : '/send-text';
+        if (preg_match('#/(send-text|send-bulk|send)$#i', $baseUrl)) {
+            $apiUrl = $baseUrl;
+        } else {
+            $apiUrl = $baseUrl . $endpoint;
+        }
+
+        if (count($targets) > 1) {
+            $payload = [
+                'phones'  => array_values($targets),
+                'message' => $message,
+            ];
+        } else {
+            $payload = [
+                'phone'   => $targets[0],
+                'message' => $message,
+            ];
+        }
+
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'User-Agent: infus2/1.0',
+            'x-api-key: ' . $apiKey,
+        ];
+        $contentType = 'json';
+    }
+
+    $ch = curl_init($apiUrl);
+    // capture headers + body so we can diagnose non-JSON HTML errors
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    // Follow HTTP redirects (301/302) so APIs that upgrade to HTTPS or redirect paths work
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
+    // Ensure POST is preserved when following redirects (prevent POST -> GET conversion)
+    if (defined('CURLOPT_POSTREDIR')) {
+        curl_setopt($ch, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL);
+    } else {
+        // Fallback numeric value if constant missing
+        @curl_setopt($ch, CURLOPT_POSTREDIR, 3);
+    }
+
+    if ($contentType === 'json') {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+    } else {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    }
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $effectiveUrl = curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
     $curlErr  = curl_error($ch);
     curl_close($ch);
 
-    if ($curlErr) {
-        return ['success' => false, 'error' => 'cURL error: ' . $curlErr];
+    $responseHeaders = null;
+    $responseBody = $response;
+    if (is_int($headerSize) && $headerSize > 0) {
+        $responseHeaders = substr($response, 0, $headerSize);
+        $responseBody = substr($response, $headerSize);
     }
 
-    $decoded = json_decode($response, true);
-    $ok      = ($httpCode === 200) && isset($decoded['status']) && $decoded['status'] === true;
+    if ($curlErr) {
+        return ['success' => false, 'error' => 'cURL error: ' . $curlErr, 'http' => $httpCode, 'url' => $effectiveUrl, 'raw' => $responseBody, 'headers' => $responseHeaders];
+    }
+
+    $decoded = json_decode($responseBody, true);
+    if ($useLegacyFonnte) {
+        $ok = ($httpCode === 200) && isset($decoded['status']) && $decoded['status'] === true;
+    } else {
+        $ok = ($httpCode === 200) && (
+            (isset($decoded['success']) && $decoded['success'] === true) ||
+            (isset($decoded['status']) && $decoded['status'] === true)
+        );
+    }
 
     return [
         'success'  => $ok,
         'http'     => $httpCode,
+        'url'      => $effectiveUrl,
+        'headers'  => $responseHeaders,
         'response' => $decoded,
+        'raw'      => $responseBody,
     ];
 }
 

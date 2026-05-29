@@ -1,7 +1,9 @@
 <?php
-// =====================================================
-// HALAMAN KELOLA DEVICE
-// =====================================================
+/**
+ * =====================================================
+ * SMART INFUS — KELOLA PERANGKAT (REFACTORED TAILWIND)
+ * =====================================================
+ */
 
 require_once __DIR__ . '/config/db.php';
 
@@ -9,74 +11,80 @@ $db      = getDB();
 $message = '';
 $msgType = 'success';
 
-// ===== PROSES FORM =====
+// --- DATA ESCAPING HELPER ---
+if (!function_exists('esc')) {
+    function esc($string) {
+        return htmlspecialchars($string ?? '', ENT_QUOTES, 'UTF-8');
+    }
+}
+
+// --- FORM CONTROLLER (POST BUSINESS LOGIC) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action      = $_POST['action'] ?? '';
+    $device_id   = trim($_POST['device_id'] ?? '');
+    $nama        = trim($_POST['nama'] ?? '');
+    $lokasi      = trim($_POST['lokasi'] ?? '');
+    $pasien      = trim($_POST['pasien'] ?? '');
+    $no_suster   = preg_replace('/\D/', '', $_POST['no_suster'] ?? '');
+    $no_keluarga = preg_replace('/\D/', '', $_POST['no_keluarga'] ?? '');
 
-  $action    = $_POST['action']    ?? '';
-  $device_id = trim($_POST['device_id'] ?? '');
-  $nama      = trim($_POST['nama']      ?? '');
-  $lokasi    = trim($_POST['lokasi']    ?? '');
-  $pasien    = trim($_POST['pasien']    ?? '');
-  $no_suster   = preg_replace('/\D/', '', $_POST['no_suster']   ?? '');
-  $no_keluarga = preg_replace('/\D/', '', $_POST['no_keluarga'] ?? '');
+    if ($action === 'add' && $device_id && $nama) {
+        $check = $db->prepare("SELECT id FROM devices WHERE device_id = :id");
+        $check->execute([':id' => $device_id]);
 
-  if ($action === 'add' && $device_id && $nama) {
-
-    $check = $db->prepare("SELECT id FROM devices WHERE device_id = :id");
-    $check->execute([':id' => $device_id]);
-
-    if ($check->fetch()) {
-      $message = "Device ID '$device_id' sudah terdaftar!";
-      $msgType = 'danger';
-    } else {
-      $stmt = $db->prepare("
+        if ($check->fetch()) {
+            $message = "Device ID '" . $device_id . "' sudah terdaftar dalam sistem!";
+            $msgType = 'danger';
+        } else {
+            $stmt = $db->prepare("
                 INSERT INTO devices (device_id, nama, lokasi, pasien, no_suster, no_keluarga)
                 VALUES (:device_id, :nama, :lokasi, :pasien, :no_suster, :no_keluarga)
             ");
-      $stmt->execute([
-        ':device_id'   => $device_id,
-        ':nama'        => $nama,
-        ':lokasi'      => $lokasi,
-        ':pasien'      => $pasien,
-        ':no_suster'   => $no_suster,
-        ':no_keluarga' => $no_keluarga,
-      ]);
-      $message = "Device '$nama' berhasil ditambahkan!";
-    }
-  } elseif ($action === 'edit' && $device_id && $nama) {
-
-    $stmt = $db->prepare("
+            $stmt->execute([
+                ':device_id'   => $device_id,
+                ':nama'        => $nama,
+                ':lokasi'      => $lokasi,
+                ':pasien'      => $pasien,
+                ':no_suster'   => $no_suster,
+                ':no_keluarga' => $no_keluarga,
+            ]);
+            $message = "Perangkat '" . $nama . "' sukses didaftarkan!";
+        }
+    } 
+    
+    elseif ($action === 'edit' && $device_id && $nama) {
+        $stmt = $db->prepare("
             UPDATE devices
             SET nama = :nama, lokasi = :lokasi, pasien = :pasien,
                 no_suster = :no_suster, no_keluarga = :no_keluarga
             WHERE device_id = :device_id
         ");
-    $stmt->execute([
-      ':device_id'   => $device_id,
-      ':nama'        => $nama,
-      ':lokasi'      => $lokasi,
-      ':pasien'      => $pasien,
-      ':no_suster'   => $no_suster,
-      ':no_keluarga' => $no_keluarga,
-    ]);
-    $message = "Device '$nama' berhasil diperbarui!";
-  } elseif ($action === 'delete' && $device_id) {
-
-    $stmt = $db->prepare("UPDATE devices SET aktif = 0 WHERE device_id = :id");
-    $stmt->execute([':id' => $device_id]);
-    $message = "Device '$device_id' berhasil dihapus!";
-  }
+        $stmt->execute([
+            ':device_id'   => $device_id,
+            ':nama'        => $nama,
+            ':lokasi'      => $lokasi,
+            ':pasien'      => $pasien,
+            ':no_suster'   => $no_suster,
+            ':no_keluarga' => $no_keluarga,
+        ]);
+        $message = "Data perangkat '" . $nama . "' berhasil diperbarui!";
+    } 
+    
+    elseif ($action === 'delete' && $device_id) {
+        $stmt = $db->prepare("UPDATE devices SET aktif = 0 WHERE device_id = :id");
+        $stmt->execute([':id' => $device_id]);
+        $message = "Perangkat '" . $device_id . "' berhasil dihapus dari daftar aktif!";
+    }
 }
 
-// edit mode
+// --- DATA FETCHING (GET) ---
 $editDevice = null;
 if (isset($_GET['edit'])) {
-  $editStmt = $db->prepare("SELECT * FROM devices WHERE device_id = :id");
-  $editStmt->execute([':id' => $_GET['edit']]);
-  $editDevice = $editStmt->fetch();
+    $editStmt = $db->prepare("SELECT * FROM devices WHERE device_id = :id");
+    $editStmt->execute([':id' => $_GET['edit']]);
+    $editDevice = $editStmt->fetch();
 }
 
-// ambil semua device
 $devices = $db->query("
     SELECT d.*,
         (SELECT COUNT(*) FROM infus_data WHERE device_id = d.device_id) AS total_data,
@@ -94,158 +102,179 @@ $activePage = 'devices';
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kelola Device — Smart Infus</title>
+  <title>Kelola Device — Central Monitoring System</title>
+  
+  <!-- Local Tailwind CSS -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+  
+  <!-- Typography & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #0f1117; color: #f1f5f9; min-height: 100vh; }
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: #0f1117; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-
-    /* NAV */
-    .si-nav { position: sticky; top: 0; z-index: 50; background: rgba(15,17,23,0.9); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .si-nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; gap: 32px; }
-    .si-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
-    .si-brand-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #2563eb, #3b82f6); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; box-shadow: 0 0 16px rgba(59,130,246,0.4); }
-    .si-brand-name { font-size: 14px; font-weight: 800; color: #f1f5f9; letter-spacing: 0.05em; line-height: 1; }
-    .si-brand-sub  { font-size: 9px; font-weight: 600; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2px; }
-    .si-nav-links  { display: flex; align-items: center; gap: 4px; flex: 1; }
-    .si-nav-link { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #64748b; text-decoration: none; transition: all 0.15s; }
-    .si-nav-link:hover { color: #f1f5f9; background: rgba(255,255,255,0.06); }
-    .si-nav-link.active { color: #3b82f6; background: rgba(59,130,246,0.12); }
-    .si-nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-
-    /* CARDS */
-    .si-card { background: #1a1d27; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; }
-
-    /* INPUTS */
-    .si-input { width: 100%; background: #21253a; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; color: #f1f5f9; font-size: 13px; font-family: inherit; transition: border-color .15s, box-shadow .15s; outline: none; }
-    .si-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
-    .si-input::placeholder { color: #475569; }
-    .si-input:disabled, .si-input[readonly] { opacity: .5; cursor: not-allowed; }
-    .si-label { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
-
-    /* BUTTONS */
-    .si-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 10px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; transition: all .15s; text-decoration: none; font-family: inherit; }
-    .si-btn-primary { background: #2563eb; color: white; }
-    .si-btn-primary:hover { background: #1d4ed8; box-shadow: 0 0 16px rgba(37,99,235,0.4); }
-    .si-btn-ghost { background: rgba(255,255,255,0.06); color: #94a3b8; border: 1px solid rgba(255,255,255,0.08); }
-    .si-btn-ghost:hover { background: rgba(255,255,255,0.1); color: #f1f5f9; }
-  </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0">
 
-  <!-- NAVBAR -->
-  <nav class="si-nav">
-    <div class="si-nav-inner">
-      <a href="index.php" class="si-brand">
-        <div class="si-brand-icon"><i class="bi bi-droplet-fill"></i></div>
+  <!-- TOP CLINICAL NAVBAR -->
+  <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Identity -->
+      <a href="index.php" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
+          <i class="bi bi-droplet-fill text-lg"></i>
+        </div>
         <div>
-          <div class="si-brand-name">SMART INFUS</div>
-          <div class="si-brand-sub">Medical Monitor</div>
+          <div class="text-xs font-black tracking-wider text-slate-900 uppercase">Smart Infus</div>
+          <div class="text-[10px] font-bold text-[#6b2072] tracking-widest uppercase">Central Station</div>
         </div>
       </a>
-      <div class="si-nav-links">
-        <a href="index.php" class="si-nav-link <?= $activePage==='dashboard'?'active':'' ?>"><i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span></a>
-        <a href="devices.php" class="si-nav-link <?= $activePage==='devices'?'active':'' ?>"><i class="bi bi-cpu-fill"></i><span>Devices</span></a>
-        <a href="settings.php" class="si-nav-link <?= $activePage==='settings'?'active':'' ?>"><i class="bi bi-sliders"></i><span>Settings</span></a>
+
+      <!-- Navigation Menu -->
+      <div class="hidden md:flex items-center gap-1">
+        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
+        </a>
+        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-cpu-fill"></i><span>Devices</span>
+        </a>
+        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-sliders"></i><span>Settings</span>
+        </a>
       </div>
-      <div class="si-nav-right"></div>
+
+      <!-- Realtime Clock Placeholder -->
+      <div class="flex items-center gap-4">
+        <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+          <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
+        </div>
+      </div>
     </div>
   </nav>
 
-  <div style="max-width:1280px;margin:0 auto;padding:32px 24px">
+  <!-- MOBILE BOTTOM NAVIGATION -->
+  <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
+    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-grid-1x2-fill text-lg"></i>
+      <span>Dashboard</span>
+    </a>
+    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-cpu-fill text-lg"></i>
+      <span>Devices</span>
+    </a>
+    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-sliders text-lg"></i>
+      <span>Settings</span>
+    </a>
+  </div>
 
-    <!-- ALERT -->
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
+    
+    <!-- ALERT NOTIFICATION -->
     <?php if ($message): ?>
-    <div style="margin-bottom:24px;padding:14px 18px;border-radius:12px;display:flex;align-items:center;gap:10px;<?= $msgType === 'success' ? 'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#10b981' : 'background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);color:#ef4444' ?>">
-      <i class="bi bi-<?= $msgType === 'success' ? 'check2-circle' : 'exclamation-circle' ?>" style="font-size:16px;flex-shrink:0"></i>
-      <span style="font-size:13px;font-weight:700"><?= htmlspecialchars($message) ?></span>
+    <div class="mb-6 p-4 rounded-xl flex items-center gap-3 border transition-all <?= $msgType === 'success' ? 'bg-emerald-50 border-emerald-200/80 text-emerald-800' : 'bg-rose-50 border-rose-200/80 text-rose-800' ?>">
+      <i class="bi bi-<?= $msgType === 'success' ? 'check2-circle' : 'exclamation-circle' ?> text-lg flex-shrink-0"></i>
+      <span class="text-xs font-bold tracking-wide"><?= esc($message) ?></span>
     </div>
     <?php endif; ?>
 
-    <div style="display:grid;grid-template-columns:360px 1fr;gap:24px;align-items:start">
-
-      <!-- FORM PANEL (Left) -->
-      <div class="si-card" style="overflow:hidden;position:sticky;top:80px">
-        <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px">
-          <div style="width:32px;height:32px;background:rgba(59,130,246,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center">
-            <i class="bi bi-<?= $editDevice ? 'pencil-square' : 'plus-square-fill' ?>" style="color:#3b82f6;font-size:14px"></i>
+    <!-- SPLIT GRID WORKSPACE -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      
+      <!-- FORM MODUL PANEL (LEFT) -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden lg:sticky lg:top-24">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+          <div class="w-8 h-8 bg-[#6b2072]/10 rounded-lg flex items-center justify-center">
+            <i class="bi bi-<?= $editDevice ? 'pencil-square text-amber-600' : 'plus-square-fill text-[#6b2072]' ?> text-sm"></i>
           </div>
-          <div style="font-size:13px;font-weight:800;color:#f1f5f9;text-transform:uppercase;letter-spacing:.04em">
-            <?= $editDevice ? 'Perbarui Data' : 'Tambah Unit Baru' ?>
+          <div>
+            <h2 class="text-xs font-black text-slate-900 tracking-wider uppercase"><?= $editDevice ? 'Perbarui Perangkat' : 'Registrasi Modul' ?></h2>
+            <p class="text-[10px] font-bold text-[#6b2072] tracking-wide uppercase">Workspace Parameter</p>
           </div>
         </div>
 
-        <form method="POST" action="devices.php" style="padding:24px;display:flex;flex-direction:column;gap:16px">
+        <form method="POST" action="devices.php" class="p-5 flex flex-col gap-5">
           <input type="hidden" name="action" value="<?= $editDevice ? 'edit' : 'add' ?>" />
 
+          <!-- Input: Device ID -->
           <div>
-            <label class="si-label"><i class="bi bi-qr-code" style="margin-right:4px"></i>Serial ID / Device ID</label>
-            <input type="text" name="device_id" class="si-input"
-              placeholder="INFUS-01"
-              value="<?= htmlspecialchars($editDevice['device_id'] ?? '') ?>"
-              <?= $editDevice ? 'readonly' : '' ?> required />
+            <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5 flex items-center gap-1">
+              <i class="bi bi-qr-code text-slate-500"></i> Serial / Device ID
+            </label>
+            <input type="text" name="device_id" placeholder="Contoh: INFUS-01" 
+                   class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 read-only:opacity-60 read-only:cursor-not-allowed"
+                   value="<?= esc($editDevice['device_id'] ?? '') ?>" <?= $editDevice ? 'readonly' : '' ?> required />
           </div>
 
+          <!-- Input: Nama Perangkat -->
           <div>
-            <label class="si-label"><i class="bi bi-tag" style="margin-right:4px"></i>Nama Perangkat</label>
-            <input type="text" name="nama" class="si-input"
-              placeholder="Unit Bed A1"
-              value="<?= htmlspecialchars($editDevice['nama'] ?? '') ?>" required />
+            <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5 flex items-center gap-1">
+              <i class="bi bi-tag text-slate-500"></i> Nama Perangkat
+            </label>
+            <input type="text" name="nama" placeholder="Contoh: Unit Bed A1" 
+                   class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5"
+                   value="<?= esc($editDevice['nama'] ?? '') ?>" required />
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <!-- Input: Lokasi & Pasien -->
+          <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="si-label"><i class="bi bi-geo-alt" style="margin-right:4px"></i>Lokasi/Ruang</label>
-              <input type="text" name="lokasi" class="si-input"
-                placeholder="Kamar 3A"
-                value="<?= htmlspecialchars($editDevice['lokasi'] ?? '') ?>" />
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5 flex items-center gap-1">
+                <i class="bi bi-geo-alt text-slate-500"></i> Ruang / Lokasi
+              </label>
+              <input type="text" name="lokasi" placeholder="Kamar 3A" 
+                     class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5"
+                     value="<?= esc($editDevice['lokasi'] ?? '') ?>" />
             </div>
             <div>
-              <label class="si-label"><i class="bi bi-person" style="margin-right:4px"></i>Pasien</label>
-              <input type="text" name="pasien" class="si-input"
-                placeholder="Nama Pasien"
-                value="<?= htmlspecialchars($editDevice['pasien'] ?? '') ?>" />
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5 flex items-center gap-1">
+                <i class="bi bi-person text-slate-500"></i> Nama Pasien
+              </label>
+              <input type="text" name="pasien" placeholder="Nama Pasien" 
+                     class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5"
+                     value="<?= esc($editDevice['pasien'] ?? '') ?>" />
             </div>
           </div>
 
-          <!-- WA Divider -->
-          <div style="display:flex;align-items:center;gap:12px;margin:4px 0">
-            <div style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></div>
-            <span style="font-size:10px;font-weight:700;color:#475569;display:flex;align-items:center;gap:6px">
-              <i class="bi bi-whatsapp" style="color:#25d366"></i>WhatsApp
+          <!-- WHATSAPP INTEGRATION DIVIDER -->
+          <div class="flex items-center gap-3 my-1">
+            <div class="flex-1 h-px bg-slate-200"></div>
+            <span class="text-[9px] font-bold text-slate-400 tracking-widest uppercase flex items-center gap-1">
+              <i class="bi bi-whatsapp text-emerald-500"></i> WhatsApp Gateway
             </span>
-            <div style="flex:1;height:1px;background:rgba(255,255,255,0.06)"></div>
+            <div class="flex-1 h-px bg-slate-200"></div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <!-- Input: WA Contacts -->
+          <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="si-label"><i class="bi bi-person-badge" style="margin-right:4px;color:#25d366"></i>No. Suster</label>
-              <input type="tel" name="no_suster" class="si-input"
-                placeholder="628123456789"
-                value="<?= htmlspecialchars($editDevice['no_suster'] ?? '') ?>" />
-              <div style="font-size:10px;color:#475569;margin-top:4px">Format: 628xxx</div>
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1 flex items-center gap-1">
+                <i class="bi bi-person-badge text-emerald-600"></i> No. Suster
+              </label>
+              <input type="tel" name="no_suster" placeholder="62812345678" 
+                     class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5"
+                     value="<?= esc($editDevice['no_suster'] ?? '') ?>" />
+              <span class="text-[9px] text-slate-400 block mt-1">Gunakan kode 62</span>
             </div>
             <div>
-              <label class="si-label"><i class="bi bi-people" style="margin-right:4px;color:#25d366"></i>No. Keluarga</label>
-              <input type="tel" name="no_keluarga" class="si-input"
-                placeholder="628987654321"
-                value="<?= htmlspecialchars($editDevice['no_keluarga'] ?? '') ?>" />
-              <div style="font-size:10px;color:#475569;margin-top:4px">Format: 628xxx</div>
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1 flex items-center gap-1">
+                <i class="bi bi-people text-emerald-600"></i> No. Keluarga
+              </label>
+              <input type="tel" name="no_keluarga" placeholder="62898765432" 
+                     class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5"
+                     value="<?= esc($editDevice['no_keluarga'] ?? '') ?>" />
+              <span class="text-[9px] text-slate-400 block mt-1">Gunakan kode 62</span>
             </div>
           </div>
 
-          <div style="display:flex;gap:10px;padding-top:4px">
-            <button type="submit" class="si-btn si-btn-primary" style="flex:1;justify-content:center">
-              <i class="bi bi-save2"></i> <?= $editDevice ? 'SIMPAN' : 'DAFTARKAN' ?>
+          <!-- Form Actions Buttons -->
+          <div class="flex items-center gap-2 pt-2">
+            <button type="submit" class="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#6b2072] hover:bg-[#541859] text-white rounded-xl text-xs font-bold shadow-md shadow-[#6b2072]/10 active:scale-95 transition-all cursor-pointer">
+              <i class="bi bi-save2"></i> <?= $editDevice ? 'UPDATE PERANGKAT' : 'SIMPAN MODUL' ?>
             </button>
             <?php if ($editDevice): ?>
-            <a href="devices.php" class="si-btn si-btn-ghost" style="padding:10px 14px">
+            <a href="devices.php" class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 rounded-xl text-xs transition-all" title="Batal Edit">
               <i class="bi bi-x-lg"></i>
             </a>
             <?php endif; ?>
@@ -253,97 +282,116 @@ $activePage = 'devices';
         </form>
       </div>
 
-      <!-- TABLE PANEL (Right) -->
-      <div class="si-card" style="overflow:hidden">
-        <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">
+      <!-- TABLE LIST PANEL (RIGHT) -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden lg:grid-cols-1 lg:col-span-2">
+        <div class="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div>
-            <div style="font-size:14px;font-weight:800;color:#f1f5f9;text-transform:uppercase;letter-spacing:.04em">Daftar Perangkat</div>
-            <div style="font-size:10px;font-weight:600;color:#475569;margin-top:2px">Total: <?= count($devices) ?> Unit Terdaftar</div>
+            <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span class="w-1.5 h-4 bg-[#6b2072] rounded-full inline-block"></span>
+              Modul Perangkat Terregistrasi
+            </h2>
           </div>
+          <span class="text-xs bg-[#6b2072]/10 border border-[#6b2072]/20 text-[#6b2072] px-2.5 py-0.5 rounded-full font-bold">
+            <?= count($devices) ?> Unit Total
+          </span>
         </div>
 
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
             <thead>
-              <tr style="background:rgba(255,255,255,0.04)">
-                <th style="padding:12px 20px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Device &amp; Lokasi</th>
-                <th style="padding:12px 20px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Pasien</th>
-                <th style="padding:12px 20px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Kontak WA</th>
-                <th style="padding:12px 20px;text-align:center;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Data</th>
-                <th style="padding:12px 20px;text-align:right;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Aksi</th>
+              <tr class="bg-slate-50/70 border-b border-slate-200 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                <th class="py-3.5 px-5">Device &amp; Bangsal</th>
+                <th class="py-3.5 px-5">Pasien Aktif</th>
+                <th class="py-3.5 px-5">Notifikasi Alur</th>
+                <th class="py-3.5 px-4 text-center">Data Log</th>
+                <th class="py-3.5 px-5 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody>
-              <?php foreach ($devices as $dev):
+            <tbody class="divide-y divide-slate-100 text-sm">
+              <?php foreach ($devices as $dev): 
                 $isOnline = false;
                 if ($dev['last_update']) {
-                  $last = strtotime($dev['last_update']);
-                  if ((time() - $last) < 60) $isOnline = true;
+                    $last = strtotime($dev['last_update']);
+                    if ((time() - $last) < 30) {
+                        $isOnline = true;
+                    }
                 }
+                $hasSuster   = !empty(trim($dev['no_suster'] ?? ''));
+                $hasKeluarga = !empty(trim($dev['no_keluarga'] ?? ''));
               ?>
-              <tr style="border-top:1px solid rgba(255,255,255,0.04);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                <td style="padding:14px 20px">
-                  <div style="display:flex;align-items:center;gap:10px">
-                    <div style="width:34px;height:34px;border-radius:8px;background:<?= $isOnline ? 'rgba(16,185,129,0.15)' : 'rgba(71,85,105,0.2)' ?>;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                      <i class="bi bi-broadcast" style="color:<?= $isOnline ? '#10b981' : '#475569' ?>;font-size:14px"></i>
+              <tr class="hover:bg-slate-50/60 transition-colors">
+                
+                <!-- Col: Device & Location -->
+                <td class="py-4 px-5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 border rounded-xl flex items-center justify-center flex-shrink-0 <?= $isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400' ?>">
+                      <i class="bi bi-broadcast text-sm <?= $isOnline ? 'animate-pulse' : '' ?>"></i>
                     </div>
                     <div>
-                      <div style="font-size:13px;font-weight:700;color:#f1f5f9"><?= htmlspecialchars($dev['nama']) ?></div>
-                      <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
-                        <span style="font-size:9px;font-weight:700;background:#21253a;color:#64748b;padding:1px 6px;border-radius:4px;text-transform:uppercase"><?= htmlspecialchars($dev['device_id']) ?></span>
-                        <span style="font-size:10px;color:#3b82f6;font-weight:600"><?= htmlspecialchars($dev['lokasi']) ?></span>
+                      <div class="font-bold text-slate-900 leading-tight"><?= esc($dev['nama']) ?></div>
+                      <div class="flex items-center gap-1.5 mt-1">
+                        <span class="text-[9px] font-black bg-slate-100 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-mono uppercase"><?= esc($dev['device_id']) ?></span>
+                        <span class="text-xs font-bold text-[#6b2072]"><?= esc($dev['lokasi']) ?></span>
                       </div>
                     </div>
                   </div>
                 </td>
-                <td style="padding:14px 20px">
-                  <div style="font-size:13px;font-weight:600;color:#e2e8f0"><?= htmlspecialchars($dev['pasien'] ?: '— Tidak Ada —') ?></div>
-                  <div style="font-size:10px;color:#475569;margin-top:2px">
-                    <i class="bi bi-clock-history" style="margin-right:2px"></i>
-                    <?= $dev['last_update'] ? date('H:i', strtotime($dev['last_update'])) : 'Belum ada data' ?>
+
+                <!-- Col: Patient -->
+                <td class="py-4 px-5">
+                  <div class="font-bold text-slate-800"><?= esc($dev['pasien'] ?: '— Kosong —') ?></div>
+                  <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                    <i class="bi bi-clock-history"></i>
+                    <?= $dev['last_update'] ? date('H:i:s', strtotime($dev['last_update'])) : 'No signals' ?>
                   </div>
                 </td>
-                <td style="padding:14px 20px">
-                  <?php
-                    $hasSuster   = !empty(trim($dev['no_suster']   ?? ''));
-                    $hasKeluarga = !empty(trim($dev['no_keluarga'] ?? ''));
-                  ?>
-                  <div style="display:flex;flex-direction:column;gap:4px">
-                    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:<?= $hasSuster ? '#10b981' : '#475569' ?>">
-                      <i class="bi bi-person-badge"></i>
-                      <span style="font-weight:600"><?= $hasSuster ? htmlspecialchars($dev['no_suster']) : '— belum diisi —' ?></span>
+
+                <!-- Col: WA Contact Status -->
+                <td class="py-4 px-5">
+                  <div class="flex flex-col gap-1.5">
+                    <div class="flex items-center gap-1.5 text-xs font-semibold <?= $hasSuster ? 'text-emerald-600' : 'text-slate-400' ?>">
+                      <i class="bi bi-person-badge text-[10px]"></i>
+                      <span><?= $hasSuster ? esc($dev['no_suster']) : 'Suster N/A' ?></span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:<?= $hasKeluarga ? '#10b981' : '#475569' ?>">
-                      <i class="bi bi-people"></i>
-                      <span style="font-weight:600"><?= $hasKeluarga ? htmlspecialchars($dev['no_keluarga']) : '— belum diisi —' ?></span>
+                    <div class="flex items-center gap-1.5 text-xs font-semibold <?= $hasKeluarga ? 'text-emerald-600' : 'text-slate-400' ?>">
+                      <i class="bi bi-people text-[10px]"></i>
+                      <span><?= $hasKeluarga ? esc($dev['no_keluarga']) : 'Wali N/A' ?></span>
                     </div>
                   </div>
                 </td>
-                <td style="padding:14px 20px;text-align:center">
-                  <div style="font-size:16px;font-weight:900;color:#f1f5f9"><?= number_format($dev['total_data']) ?></div>
-                  <div style="font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Paket</div>
+
+                <!-- Col: Total Logs -->
+                <td class="py-4 px-4 text-center">
+                  <div class="text-base font-black text-slate-900 tabular-nums"><?= number_format($dev['total_data']) ?></div>
+                  <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Packets</span>
                 </td>
-                <td style="padding:14px 20px;text-align:right">
-                  <div style="display:flex;gap:6px;justify-content:flex-end">
-                    <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" title="Lihat Detail"
-                       style="width:32px;height:32px;background:rgba(59,130,246,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#3b82f6;text-decoration:none;transition:all .15s"
-                       onmouseover="this.style.background='#2563eb';this.style.color='white'" onmouseout="this.style.background='rgba(59,130,246,0.12)';this.style.color='#3b82f6'">
-                      <i class="bi bi-bar-chart-fill" style="font-size:12px"></i>
+
+                <!-- Col: Actions -->
+                <td class="py-4 px-5 text-right">
+                  <div class="flex items-center justify-flex-end gap-1.5">
+                    
+                    <!-- Detail View Button -->
+                    <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" title="Analisis Grafik"
+                       class="w-8 h-8 bg-slate-100 hover:bg-slate-900 text-slate-600 hover:text-white rounded-xl flex items-center justify-center transition-all border border-slate-200 active:scale-90">
+                      <i class="bi bi-bar-chart-fill text-xs"></i>
                     </a>
-                    <a href="devices.php?edit=<?= urlencode($dev['device_id']) ?>" title="Edit Device"
-                       style="width:32px;height:32px;background:rgba(245,158,11,0.12);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#f59e0b;text-decoration:none;transition:all .15s"
-                       onmouseover="this.style.background='#d97706';this.style.color='white'" onmouseout="this.style.background='rgba(245,158,11,0.12)';this.style.color='#f59e0b'">
-                      <i class="bi bi-pencil-fill" style="font-size:11px"></i>
+
+                    <!-- Edit Trigger Button -->
+                    <a href="devices.php?edit=<?= urlencode($dev['device_id']) ?>" title="Modifikasi Konfigurasi"
+                       class="w-8 h-8 bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-500 hover:text-white rounded-xl flex items-center justify-center transition-all active:scale-90">
+                      <i class="bi bi-pencil-fill text-[11px]"></i>
                     </a>
-                    <form method="POST" action="devices.php" style="display:inline" onsubmit="return confirm('Hapus device <?= htmlspecialchars(addslashes($dev['nama'])) ?> dari sistem?')">
+
+                    <!-- Delete Soft Form -->
+                    <form method="POST" action="devices.php" class="inline" onsubmit="return confirm('Apakah Anda yakin ingin menonaktifkan unit <?= esc(addslashes($dev['nama'])) ?>?')">
                       <input type="hidden" name="action" value="delete" />
-                      <input type="hidden" name="device_id" value="<?= htmlspecialchars($dev['device_id']) ?>" />
-                      <button type="submit" title="Hapus Device"
-                              style="width:32px;height:32px;background:rgba(239,68,68,0.12);border:none;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#ef4444;cursor:pointer;transition:all .15s"
-                              onmouseover="this.style.background='#dc2626';this.style.color='white'" onmouseout="this.style.background='rgba(239,68,68,0.12)';this.style.color='#ef4444'">
-                        <i class="bi bi-trash3-fill" style="font-size:11px"></i>
+                      <input type="hidden" name="device_id" value="<?= esc($dev['device_id']) ?>" />
+                      <button type="submit" title="Drop Device"
+                              class="w-8 h-8 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-500 hover:text-white rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-90">
+                        <i class="bi bi-trash3-fill text-[11px]"></i>
                       </button>
                     </form>
+
                   </div>
                 </td>
               </tr>
@@ -351,9 +399,9 @@ $activePage = 'devices';
 
               <?php if (empty($devices)): ?>
               <tr>
-                <td colspan="5" style="padding:60px 20px;text-align:center">
-                  <i class="bi bi-hdd-stack" style="font-size:40px;color:#334155;display:block;margin-bottom:12px"></i>
-                  <p style="font-size:11px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.1em">Database Kosong</p>
+                <td colspan="5" class="py-16 text-center text-xs font-bold text-slate-400 tracking-wider uppercase">
+                  <i class="bi bi-hdd-stack-fill text-3xl block text-slate-300 mb-2"></i>
+                  Belum Ada Perangkat yang Didaftarkan
                 </td>
               </tr>
               <?php endif; ?>
@@ -362,11 +410,26 @@ $activePage = 'devices';
         </div>
       </div>
 
-    </div><!-- /grid -->
-  </div><!-- /container -->
+    </div>
+  </main>
 
-  <footer style="padding:32px 24px;text-align:center">
-    <p style="font-size:10px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.2em">&copy; <?= date('Y') ?> Smart Infus Monitoring System</p>
+  <!-- WORKSTATION FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-center">
+    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
+
+  <!-- REALTIME JAVASCRIPT CLOCK PIPELINE -->
+  <script>
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2,'0');
+      const m = String(now.getMinutes()).padStart(2,'0');
+      const s = String(now.getSeconds()).padStart(2,'0');
+      const el = document.getElementById('clockText');
+      if (el) el.textContent = h + ':' + m + ':' + s;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+  </script>
 </body>
 </html>

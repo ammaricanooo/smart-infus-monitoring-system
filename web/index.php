@@ -1,6 +1,6 @@
 <?php
 // =====================================================
-// SMART INFUS — DASHBOARD UTAMA
+// SMART INFUS — DASHBOARD UTAMA (REFACTORED TAILWIND)
 // =====================================================
 
 require_once __DIR__ . '/config/db.php';
@@ -31,9 +31,9 @@ $lowVolumeCount = 0;
 $onlineCount    = 0;
 
 foreach ($devices as $dev) {
-  if ($dev['nurse_call'])                                  $nurseCallCount++;
-  if ($dev['persen'] !== null && $dev['persen'] <= 20)     $lowVolumeCount++;
-  if ($dev['last_update'] && strtotime($dev['last_update']) >= time() - 30) $onlineCount++;
+    if ($dev['nurse_call'])                                                 $nurseCallCount++;
+    if ($dev['persen'] !== null && $dev['persen'] <= 20)                     $lowVolumeCount++;
+    if ($dev['last_update'] && strtotime($dev['last_update']) >= time() - 30) $onlineCount++;
 }
 
 $logStmt = $db->query("
@@ -51,313 +51,335 @@ $activePage = 'dashboard';
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Infus — Dashboard</title>
+  <title>Smart Infus — Central Monitoring System</title>
+  
+  <!-- Local Tailwind CSS -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+  
+  <!-- Typography & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #0f1117; color: #f1f5f9; min-height: 100vh; }
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: #0f1117; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-
-    /* NAV */
-    .si-nav { position: sticky; top: 0; z-index: 50; background: rgba(15,17,23,0.9); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .si-nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; gap: 32px; }
-    .si-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
-    .si-brand-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #2563eb, #3b82f6); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; box-shadow: 0 0 16px rgba(59,130,246,0.4); }
-    .si-brand-name { font-size: 14px; font-weight: 800; color: #f1f5f9; letter-spacing: 0.05em; line-height: 1; }
-    .si-brand-sub  { font-size: 9px; font-weight: 600; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2px; }
-    .si-nav-links  { display: flex; align-items: center; gap: 4px; flex: 1; }
-    .si-nav-link { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #64748b; text-decoration: none; transition: all 0.15s; }
-    .si-nav-link:hover { color: #f1f5f9; background: rgba(255,255,255,0.06); }
-    .si-nav-link.active { color: #3b82f6; background: rgba(59,130,246,0.12); }
-    .si-nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-    .si-clock { font-size: 13px; font-weight: 700; color: #f1f5f9; font-variant-numeric: tabular-nums; }
-
-    /* CARDS */
-    .si-card { background: #1a1d27; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; }
-    .si-section-title { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.1em; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-    .si-section-title::before { content: ''; width: 3px; height: 14px; background: #3b82f6; border-radius: 2px; display: inline-block; }
-
-    /* DEVICE CARD */
-    .device-card { overflow: hidden; position: relative; transition: transform .2s, box-shadow .2s; }
-    .device-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
-
-    /* BOTTLE */
-    .infusion-bottle { border: 2px solid rgba(255,255,255,0.1); border-radius: 6px 6px 12px 12px; position: relative; overflow: hidden; background: #21253a; flex-shrink: 0; }
-    .infusion-liquid { position: absolute; bottom: 0; left: 0; right: 0; transition: height 1s ease-in-out; }
-
-    /* PROGRESS BARS */
-    .bar-blue   { background: linear-gradient(90deg, #2563eb, #60a5fa); }
-    .bar-orange { background: linear-gradient(90deg, #d97706, #f59e0b); }
-    .bar-red    { background: linear-gradient(90deg, #dc2626, #f87171); animation: blinkBar 1s ease-in-out infinite; }
-    @keyframes blinkBar { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-    /* NURSE CALL ANIMATIONS */
-    .pulse-danger { animation: pulseDanger 2s infinite; }
-    @keyframes pulseDanger { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)} 70%{box-shadow:0 0 0 14px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
-    .nurse-ring { box-shadow: 0 0 0 3px rgba(239,68,68,.6); animation: nurseGlow 1.4s ease-in-out infinite; }
-    @keyframes nurseGlow { 0%,100%{box-shadow:0 0 0 3px rgba(239,68,68,.5)} 50%{box-shadow:0 0 0 8px rgba(239,68,68,.15)} }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-    /* BADGES */
-    .si-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .si-badge-online  { background: rgba(16,185,129,0.15); color: #10b981; }
-    .si-badge-offline { background: rgba(71,85,105,0.3);   color: #64748b; }
-    .si-badge-nurse   { background: rgba(239,68,68,0.2);   color: #ef4444; }
-    .hidden { display: none !important; }
-  </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0">
 
-  <!-- NAVBAR -->
-  <nav class="si-nav">
-    <div class="si-nav-inner">
-      <a href="index.php" class="si-brand">
-        <div class="si-brand-icon"><i class="bi bi-droplet-fill"></i></div>
+  <!-- TOP CLINICAL NAVBAR -->
+  <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Identity -->
+      <a href="index.php" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
+          <i class="bi bi-droplet-fill text-lg"></i>
+        </div>
         <div>
-          <div class="si-brand-name">SMART INFUS</div>
-          <div class="si-brand-sub">Medical Monitor</div>
+          <div class="text-xs font-black tracking-wider text-slate-900 uppercase">Smart Infus</div>
+          <div class="text-[10px] font-bold text-[#6b2072] tracking-widest uppercase">Central Station</div>
         </div>
       </a>
-      <div class="si-nav-links">
-        <a href="index.php" class="si-nav-link <?= $activePage==='dashboard'?'active':'' ?>"><i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span></a>
-        <a href="devices.php" class="si-nav-link <?= $activePage==='devices'?'active':'' ?>"><i class="bi bi-cpu-fill"></i><span>Devices</span></a>
-        <a href="settings.php" class="si-nav-link <?= $activePage==='settings'?'active':'' ?>"><i class="bi bi-sliders"></i><span>Settings</span></a>
+
+      <!-- Navigation Menu -->
+      <div class="hidden md:flex items-center gap-1">
+        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
+        </a>
+        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-cpu-fill"></i><span>Devices</span>
+        </a>
+        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-sliders"></i><span>Settings</span>
+        </a>
       </div>
-      <div class="si-nav-right">
-        <span id="clockText" class="si-clock">--:--:--</span>
+
+      <!-- Realtime Clock & Status Counter -->
+      <div class="flex items-center gap-4">
+        <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+          <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
+        </div>
       </div>
     </div>
   </nav>
 
-  <main style="max-width:1280px;margin:0 auto;padding:32px 24px">
+  <!-- MOBILE BOTTOM NAVIGATION -->
+  <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
+    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-grid-1x2-fill text-lg"></i>
+      <span>Dashboard</span>
+    </a>
+    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-cpu-fill text-lg"></i>
+      <span>Devices</span>
+    </a>
+    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-sliders text-lg"></i>
+      <span>Settings</span>
+    </a>
+  </div>
 
-    <!-- STAT CARDS -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px">
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
 
-      <!-- Total -->
-      <div class="si-card" style="padding:20px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <span style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em">Total Unit</span>
-          <div style="width:36px;height:36px;background:rgba(59,130,246,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">
-            <i class="bi bi-layers" style="color:#3b82f6;font-size:16px"></i>
-          </div>
+    <!-- HOSPITAL CLINICAL OVERVIEW (STATISTICS) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+
+      <!-- Stat: Total Devices -->
+      <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Unit Monitor</span>
+          <div id="stat-total" class="text-3xl font-extrabold text-slate-900 mt-1"><?= $totalDevices ?></div>
+          <p class="text-[11px] text-slate-500 mt-1">Perangkat terkonfigurasi</p>
         </div>
-        <div id="stat-total" style="font-size:36px;font-weight:900;color:#f1f5f9;line-height:1"><?= $totalDevices ?></div>
-        <div style="font-size:11px;color:#475569;margin-top:4px">Perangkat terdaftar</div>
+        <div class="w-12 h-12 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center border border-slate-200">
+          <i class="bi bi-layers-half text-xl"></i>
+        </div>
       </div>
 
-      <!-- Online -->
-      <div class="si-card" style="padding:20px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <span style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em">Online</span>
-          <div style="width:36px;height:36px;background:rgba(16,185,129,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">
-            <i class="bi bi-wifi" style="color:#10b981;font-size:16px"></i>
-          </div>
+      <!-- Stat: Online Station -->
+      <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Koneksi Aktif</span>
+          <div id="stat-online" class="text-3xl font-extrabold text-emerald-600 mt-1"><?= $onlineCount ?></div>
+          <p class="text-[11px] text-slate-500 mt-1">Sinyal aktual &lt; 30d</p>
         </div>
-        <div id="stat-online" style="font-size:36px;font-weight:900;color:#10b981;line-height:1"><?= $onlineCount ?></div>
-        <div style="font-size:11px;color:#475569;margin-top:4px">Aktif &lt; 30 detik</div>
+        <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center border border-emerald-100">
+          <i class="bi bi-wifi text-xl"></i>
+        </div>
       </div>
 
-      <!-- Low Volume -->
-      <div class="si-card" style="padding:20px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <span style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em">Low Vol</span>
-          <div style="width:36px;height:36px;background:rgba(245,158,11,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">
-            <i class="bi bi-droplet-half" style="color:#f59e0b;font-size:16px"></i>
-          </div>
+      <!-- Stat: Low Volume Alert -->
+      <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Kritis (&le; 20%)</span>
+          <div id="stat-low" class="text-3xl font-extrabold <?= $lowVolumeCount > 0 ? 'text-amber-500' : 'text-slate-900' ?> mt-1"><?= $lowVolumeCount ?></div>
+          <p class="text-[11px] text-slate-500 mt-1">Butuh pergantian segera</p>
         </div>
-        <div id="stat-low" style="font-size:36px;font-weight:900;color:#f59e0b;line-height:1"><?= $lowVolumeCount ?></div>
-        <div style="font-size:11px;color:#475569;margin-top:4px">Volume ≤ 20%</div>
+        <div class="w-12 h-12 <?= $lowVolumeCount > 0 ? 'bg-amber-50 text-amber-500 border-amber-100' : 'bg-slate-100 text-slate-600 border-slate-200' ?> rounded-xl flex items-center justify-center border">
+          <i class="bi bi-droplet-half text-xl"></i>
+        </div>
       </div>
 
-      <!-- Emergency -->
-      <div id="stat-nurse-card" class="si-card <?= $nurseCallCount > 0 ? 'pulse-danger' : '' ?>" style="padding:20px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <span style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em">Emergency</span>
-          <div style="width:36px;height:36px;background:rgba(239,68,68,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">
-            <i class="bi bi-bell-fill" style="color:#ef4444;font-size:16px"></i>
-          </div>
+      <!-- Stat: Emergency Emergency (Nurse Call) -->
+      <div id="stat-nurse-card" class="border p-5 rounded-2xl shadow-sm flex items-center justify-between transition-all <?= $nurseCallCount > 0 ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-500/20' : 'bg-white border-slate-200 text-slate-900' ?>">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider <?= $nurseCallCount > 0 ? 'text-red-100' : 'text-slate-400' ?>">Panggilan Darurat</span>
+          <div id="stat-nurse" class="text-3xl font-extrabold mt-1 <?= $nurseCallCount > 0 ? 'text-white' : 'text-red-500' ?>"><?= $nurseCallCount ?></div>
+          <p class="text-[11px] mt-1 <?= $nurseCallCount > 0 ? 'text-red-100' : 'text-slate-500' ?>">Nurse Call aktif</p>
         </div>
-        <div id="stat-nurse" style="font-size:36px;font-weight:900;color:#ef4444;line-height:1"><?= $nurseCallCount ?></div>
-        <div style="font-size:11px;color:#475569;margin-top:4px">Nurse call aktif</div>
+        <div class="w-12 h-12 rounded-xl flex items-center justify-center border <?= $nurseCallCount > 0 ? 'bg-white/20 border-white/30 text-white animate-bounce' : 'bg-red-50 text-red-500 border-red-100' ?>">
+          <i class="bi bi-bell-fill text-xl"></i>
+        </div>
       </div>
 
     </div>
 
-    <!-- SECTION HEADER -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div class="si-section-title" style="margin-bottom:0">Monitoring Real-time</div>
-      <button onclick="refreshAll()" style="display:flex;align-items:center;gap:6px;padding:8px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#94a3b8;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
-        <i class="bi bi-arrow-repeat"></i> REFRESH
+    <!-- MAIN MONITOR GRID MODULES -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
+      <div>
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span class="w-1.5 h-4 bg-[#6b2072] rounded-full inline-block"></span>
+          Bangsal Perawatan Real-time
+        </h2>
+      </div>
+      <button onclick="refreshAll()" class="inline-flex w-fit items-center gap-2 px-3.5 py-1.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-bold text-slate-600 shadow-sm cursor-pointer hover:bg-slate-50 active:scale-95 transition-all">
+        <i class="bi bi-arrow-repeat"></i> SINKRONISASI DATA
       </button>
     </div>
 
-    <!-- DEVICE GRID -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px">
+    <!-- MONITORING CELLS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <?php foreach ($devices as $dev):
         $persen      = $dev['persen'] ?? 0;
         $isOnline    = $dev['last_update'] && (strtotime($dev['last_update']) >= time() - 30);
         $isNurse     = (bool)$dev['nurse_call'];
-        $barClass    = $persen > 50 ? 'bar-blue' : ($persen > 20 ? 'bar-orange' : 'bar-red');
-        $liqColor    = $persen > 50 ? 'linear-gradient(0deg,#2563eb,#60a5fa)' : ($persen > 20 ? 'linear-gradient(0deg,#d97706,#f59e0b)' : 'linear-gradient(0deg,#dc2626,#f87171)');
-        $topGrad     = $isNurse ? 'linear-gradient(90deg,#dc2626,#f97316)' : 'linear-gradient(90deg,#2563eb,#60a5fa)';
+        
+        // Semantic Rules
+        if ($isNurse) {
+            $statusColor = 'border-red-500 ring-4 ring-red-500/10 bg-red-50/30';
+            $barColor    = 'bg-red-500';
+            $liquidColor = 'bg-red-400';
+        } elseif ($persen <= 10 && $persen > 0) {
+            $statusColor = 'border-amber-400 ring-4 ring-amber-500/5 bg-amber-50/20';
+            $barColor    = 'bg-amber-500';
+            $liquidColor = 'bg-amber-400';
+        } else {
+            $statusColor = 'border-slate-200 hover:border-slate-300 bg-white';
+            $barColor    = 'bg-[#6b2072]'; // Warna Korporat Ungu
+            $liquidColor = 'bg-[#6b2072]/80';
+        }
       ?>
       <div id="card-<?= htmlspecialchars($dev['device_id']) ?>"
            data-pasien="<?= htmlspecialchars($dev['pasien']) ?>"
            data-lokasi="<?= htmlspecialchars($dev['lokasi']) ?>"
-           class="si-card device-card <?= $isNurse ? 'nurse-ring' : '' ?>">
+           class="border rounded-2xl p-5 relative overflow-hidden shadow-sm flex flex-col justify-between transition-all <?= $statusColor ?>">
 
-        <!-- accent bar top -->
-        <div data-role="card-top" style="height:3px;background:<?= $topGrad ?>"></div>
-
-        <div style="padding:18px">
-
-          <!-- Row 1: bottle + nama + badges -->
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
-            <div style="display:flex;align-items:center;gap:12px">
-              <div class="infusion-bottle" style="width:36px;height:56px">
-                <div data-role="bottle-liquid" class="infusion-liquid" style="height:<?= $persen ?>%;background:<?= $liqColor ?>"></div>
+        <div>
+          <!-- Header Cell: Badges + Action Buttons -->
+          <div class="flex items-start justify-between gap-2 mb-4">
+            <div class="flex items-center gap-3">
+              <!-- Physical Bottle Indicator Simulation -->
+              <div class="w-8 h-12 bg-slate-100 border-2 border-slate-200 rounded-t-md rounded-b-xl relative overflow-hidden flex-shrink-0 shadow-inner">
+                <div data-role="bottle-liquid" class="absolute bottom-0 inset-x-0 transition-all duration-1000 <?= $liquidColor ?>" style="height: <?= $persen ?>%">
+                  <div class="w-full h-1 bg-white/20 absolute top-0"></div>
+                </div>
               </div>
               <div>
-                <div style="font-size:13px;font-weight:700;color:#f1f5f9"><?= htmlspecialchars($dev['nama']) ?></div>
-                <div style="font-size:11px;color:#475569;margin-top:2px"><i class="bi bi-geo-alt" style="margin-right:2px"></i><?= htmlspecialchars($dev['lokasi']) ?></div>
+                <h3 class="text-sm font-bold text-slate-900 leading-tight"><?= htmlspecialchars($dev['nama']) ?></h3>
+                <p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                  <i class="bi bi-geo-alt"></i><?= htmlspecialchars($dev['lokasi']) ?>
+                </p>
               </div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <span data-role="online-badge" class="si-badge <?= $isOnline ? 'si-badge-online' : 'si-badge-offline' ?>">
-                <span style="width:5px;height:5px;border-radius:50%;background:<?= $isOnline ? '#10b981' : '#64748b' ?>;display:inline-block"></span>
-                <?= $isOnline ? 'ONLINE' : 'OFFLINE' ?>
+
+            <!-- System Network Status Indicators -->
+            <div class="flex flex-col items-end gap-1.5">
+              <span data-role="online-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase border <?= $isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200' ?>">
+                <span class="w-1 h-1 rounded-full <?= $isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400' ?>"></span>
+                <?= $isOnline ? 'Connected' : 'Offline' ?>
               </span>
-              <span data-role="nurse-badge" class="si-badge si-badge-nurse <?= $isNurse ? '' : 'hidden' ?>">
-                <i class="bi bi-bell-fill" style="font-size:8px"></i> NURSE CALL
+              
+              <?php if($isNurse): ?>
+              <span data-role="nurse-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold text-white tracking-wider uppercase bg-red-500 animate-medical-pulse">
+                <i class="bi bi-bell-fill text-[8px]"></i> NURSE CALL
               </span>
+              <?php endif; ?>
             </div>
           </div>
 
-          <!-- Row 2: pasien info -->
-          <div style="background:#21253a;border-radius:10px;padding:10px 12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="width:26px;height:26px;background:rgba(59,130,246,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center">
-                <i class="bi bi-person-fill" style="color:#3b82f6;font-size:11px"></i>
+          <!-- Patient Identity Attachment -->
+          <div class="bg-slate-100/80 border border-slate-200/60 rounded-xl p-2.5 mb-4 flex items-center justify-between">
+            <div class="flex items-center gap-2 truncate">
+              <div class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center flex-shrink-0 text-slate-500">
+                <i class="bi bi-person-fill text-xs"></i>
               </div>
-              <span style="font-size:13px;font-weight:600;color:#e2e8f0"><?= htmlspecialchars($dev['pasien']) ?></span>
+              <span class="text-xs font-bold text-slate-700 truncate"><?= htmlspecialchars($dev['pasien']) ?></span>
             </div>
-            <span data-role="mode-badge" style="font-size:10px;font-weight:700;background:#0f1117;color:#94a3b8;padding:2px 8px;border-radius:6px"><?= htmlspecialchars($dev['mode'] ?? '-') ?></span>
+            <span data-role="mode-badge" class="text-[10px] font-extrabold bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-500 uppercase tracking-wide"><?= htmlspecialchars($dev['mode'] ?? '-') ?></span>
           </div>
 
-          <!-- Row 3: progress bar -->
-          <div style="margin-bottom:14px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-              <span style="font-size:10px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.06em">Volume</span>
-              <span data-role="persen-text" style="font-size:11px;font-weight:800;color:#f1f5f9"><?= number_format($persen,0) ?>%</span>
-            </div>
-            <div style="height:6px;background:#21253a;border-radius:3px;overflow:hidden">
-              <div data-role="progress-bar" class="<?= $barClass ?>" style="height:100%;border-radius:3px;width:<?= $persen ?>%;transition:width .5s"></div>
-            </div>
-            <div data-role="low-warning" style="margin-top:6px;font-size:10px;font-weight:700;color:#ef4444;display:flex;align-items:center;gap:4px" class="<?= $persen <= 20 ? '' : 'hidden' ?>">
-              <i class="bi bi-exclamation-triangle-fill"></i> Volume hampir habis!
-            </div>
-          </div>
-
-          <!-- Row 4: TPM + Volume grid -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div style="background:#21253a;border-radius:10px;padding:10px;text-align:center">
-              <div style="font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">TPM</div>
-              <div data-role="tpm-value" style="font-size:20px;font-weight:900;color:#f1f5f9"><?= number_format($dev['tpm'] ?? 0) ?></div>
-            </div>
-            <div style="background:#21253a;border-radius:10px;padding:10px;text-align:center">
-              <div style="font-size:9px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Sisa</div>
-              <div style="font-size:20px;font-weight:900;color:#f1f5f9">
-                <span data-role="volume-display"><?= number_format($dev['volume_sisa'] ?? 0) ?></span><span style="font-size:10px;color:#475569"> ml</span>
+          <!-- Precise Quantities (TPM & Volume Metrics) -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
+              <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Flow Rate</span>
+              <div class="text-xl font-black text-slate-900 mt-0.5">
+                <span data-role="tpm-value"><?= number_format($dev['tpm'] ?? 0) ?></span>
+                <span class="text-xs font-medium text-slate-400">TPM</span>
               </div>
             </div>
+            <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
+              <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Sisa Cairan</span>
+              <!-- SESUDAH (BIARKAN SEPERTI INI DI INDEX.PHP) -->
+<div class="text-xl font-black text-slate-900 mt-0.5">
+  <span data-role="volume-display"><?= number_format($dev['volume_sisa'] ?? 0) ?></span><span class="text-xs font-medium text-slate-400">/<?= number_format($dev['volume_awal'] ?? 0) ?>mL</span>
+</div>
+            </div>
           </div>
 
-          <!-- Row 5: estimasi -->
-          <div style="background:#21253a;border-radius:10px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-            <span style="font-size:10px;font-weight:600;color:#475569;text-transform:uppercase">Estimasi Habis</span>
-            <span data-role="estimasi-value" style="font-size:13px;font-weight:800;color:#f1f5f9"><?= $dev['estimasi_jam'] ?>j <?= $dev['estimasi_mnt'] ?>m</span>
+          <!-- Volumetric Progress Linear Bars -->
+          <div class="mb-4">
+            <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+              <span>Rasio Infus</span>
+              <span data-role="persen-text" class="text-slate-700 font-extrabold text-xs"><?= number_format($persen,0) ?>%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 border border-slate-200/80 rounded-full overflow-hidden">
+              <div data-role="progress-bar" class="h-full rounded-full transition-all duration-1000 <?= $barColor ?>" style="width: <?= $persen ?>%"></div>
+            </div>
+            
+            <?php if ($persen <= 20): ?>
+            <div data-role="low-warning" class="mt-2 text-[10px] font-bold text-red-500 flex items-center gap-1">
+              <i class="bi bi-exclamation-triangle-fill"></i> Perhatian: Kritis, segera ganti infus baru!
+            </div>
+            <?php endif; ?>
           </div>
 
-          <!-- Row 6: footer -->
-          <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06)">
-            <span data-role="last-update" style="font-size:10px;color:#475569">
-              <i class="bi bi-clock-history" style="margin-right:3px"></i><?= $dev['last_update'] ? date('H:i:s', strtotime($dev['last_update'])) : 'Belum ada data' ?>
+          <!-- Time Frame Remaining Estimates -->
+          <div class="bg-slate-50/60 border border-slate-200/40 rounded-xl px-3 py-2 flex items-center justify-between mb-4">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimasi Sisa Waktu</span>
+            <span data-role="estimasi-value" class="text-xs font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200/60 shadow-sm tabular-nums">
+              <?= $dev['estimasi_jam'] ?>j <?= $dev['estimasi_mnt'] ?>m
             </span>
-            <div style="display:flex;gap:6px">
-              <a href="devices.php?edit=<?= urlencode($dev['device_id']) ?>" style="padding:6px 10px;background:#21253a;border-radius:8px;color:#f59e0b;font-size:11px;font-weight:700;text-decoration:none;border:1px solid rgba(245,158,11,0.2)">
-                <i class="bi bi-pencil-fill"></i>
-              </a>
-              <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" style="padding:6px 14px;background:#2563eb;border-radius:8px;color:white;font-size:11px;font-weight:700;text-decoration:none">
-                DETAIL
-              </a>
-            </div>
           </div>
+        </div>
 
-        </div><!-- /padding -->
-
-        <!-- Nurse overlay -->
-        <div data-role="nurse-overlay" class="<?= $isNurse ? '' : 'hidden' ?>" style="position:absolute;inset:0;background:rgba(239,68,68,0.06);pointer-events:none;animation:pulse 2s infinite"></div>
+        <!-- Cell Interactive Footer Control -->
+        <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
+          <span data-role="last-update" class="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+            <i class="bi bi-clock-history"></i> Update: <?= $dev['last_update'] ? date('H:i:s', strtotime($dev['last_update'])) : 'N/A' ?>
+          </span>
+          <div class="flex items-center gap-2">
+            <a href="devices.php?edit=<?= urlencode($dev['device_id']) ?>" class="p-2 bg-white border border-slate-200 hover:border-amber-300 rounded-xl text-amber-500 hover:bg-amber-50 active:scale-90 transition-all text-xs" title="Edit Device">
+              <i class="bi bi-pencil-fill"></i>
+            </a>
+            <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all">
+              PERIKSA
+            </a>
+          </div>
+        </div>
 
       </div>
       <?php endforeach; ?>
     </div>
 
-    <!-- NURSE CALL LOG -->
-    <div style="margin-top:48px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <div class="si-section-title" style="margin-bottom:0">
-          Riwayat Nurse Call
-          <span id="nurse-log-count" style="font-size:10px;font-weight:700;background:rgba(255,255,255,0.08);color:#94a3b8;padding:2px 8px;border-radius:20px;margin-left:4px"><?= count($nurseLogs) ?></span>
-        </div>
-        <span style="font-size:10px;font-weight:700;color:#475569;display:flex;align-items:center;gap:6px">
-          <span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;animation:pulse 2s infinite"></span>REALTIME
+    <!-- NURSE CALL ARCHIVE CHRONOLOGY LOGS -->
+    <div class="mt-12">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+        <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+          <span class="w-1.5 h-4 bg-red-500 rounded-full inline-block"></span>
+          Kronologi Panggilan Darurat (Nurse Call)
+          <span id="nurse-log-count" class="text-xs bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold ml-1"><?= count($nurseLogs) ?></span>
+        </h2>
+        <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 flex items-center gap-1 tracking-wider">
+          <span class="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></span> LIVE PIPELINE
         </span>
       </div>
 
-      <div class="si-card" style="overflow:hidden">
-        <table style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:rgba(255,255,255,0.04)">
-              <th style="padding:14px 20px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Waktu</th>
-              <th style="padding:14px 20px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Pasien &amp; Lokasi</th>
-              <th style="padding:14px 20px;text-align:left;font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em">Device ID</th>
-            </tr>
-          </thead>
-          <tbody id="nurse-log-tbody">
-            <?php foreach ($nurseLogs as $log): ?>
-            <tr style="border-top:1px solid rgba(255,255,255,0.04);transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-              <td style="padding:14px 20px;font-size:12px;font-weight:700;color:#94a3b8"><?= date('H:i:s', strtotime($log['created_at'])) ?></td>
-              <td style="padding:14px 20px">
-                <div style="font-size:13px;font-weight:700;color:#f1f5f9"><?= htmlspecialchars($log['pasien'] ?? 'Unknown') ?></div>
-                <div style="font-size:10px;color:#475569;margin-top:2px"><?= htmlspecialchars($log['lokasi'] ?? '-') ?></div>
-              </td>
-              <td style="padding:14px 20px;font-size:11px;font-weight:600;color:#475569"><?= htmlspecialchars($log['device_id']) ?></td>
-            </tr>
-            <?php endforeach; ?>
-            <?php if (empty($nurseLogs)): ?>
-            <tr>
-              <td colspan="3" style="padding:48px 20px;text-align:center;font-size:11px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.1em">Belum ada log</td>
-            </tr>
-            <?php endif; ?>
-          </tbody>
-        </table>
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                <th class="py-3.5 px-6">Waktu Kejadian</th>
+                <th class="py-3.5 px-6">Identitas Pasien / Lokasi Kamar</th>
+                <th class="py-3.5 px-6">Kode Modul Device</th>
+              </tr>
+            </thead>
+            <tbody id="nurse-log-tbody" class="divide-y divide-slate-100 text-sm">
+              <?php foreach ($nurseLogs as $log): ?>
+              <tr class="hover:bg-slate-50/80 transition-colors">
+                <td class="py-4 px-6 font-bold text-slate-500 tabular-nums"><?= date('H:i:s', strtotime($log['created_at'])) ?></td>
+                <td class="py-4 px-6">
+                  <div class="font-bold text-slate-900"><?= htmlspecialchars($log['pasien'] ?? 'Pasien Anonim') ?></div>
+                  <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                    <i class="bi bi-geo-alt text-[11px]"></i><?= htmlspecialchars($log['lokasi'] ?? '-') ?>
+                  </div>
+                </td>
+                <td class="py-4 px-6 font-semibold text-slate-400 font-mono text-xs"><?= htmlspecialchars($log['device_id']) ?></td>
+              </tr>
+              <?php endforeach; ?>
+              
+              <?php if (empty($nurseLogs)): ?>
+              <tr>
+                <td colspan="3" class="py-12 text-center text-xs font-bold text-slate-400 tracking-wider uppercase">
+                  <i class="bi bi-shield-check text-2xl block text-slate-300 mb-2"></i>
+                  Sistem Aman — Belum Ada Log Masuk
+                </td>
+              </tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
   </main>
 
-  <footer style="padding:32px 24px;text-align:center">
-    <p style="font-size:10px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.2em">&copy; <?= date('Y') ?> Smart Infus Monitoring System</p>
+  <!-- MEDICAL WORKSTATION FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-center">
+    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
 
+  <!-- REALTIME JAVASCRIPT CLOCK PIPELINE -->
   <script>
-    // Realtime clock
     function updateClock() {
       const now = new Date();
       const h = String(now.getHours()).padStart(2,'0');

@@ -1,5 +1,5 @@
 // =====================================================
-// DETAIL PAGE — CHART & AUTO REFRESH (REALTIME)
+// DETAIL PAGE — CHART & AUTO REFRESH (REALTIME TAILWIND)
 // =====================================================
 
 // ===== CHART UTAMA (TPM + Volume) =====
@@ -14,12 +14,12 @@ const mainChart = new Chart(ctxMain, {
         label: 'TPM (Tetes/Menit)',
         data: chartTPM,
         borderColor: '#dc2626',
-        backgroundColor: 'rgba(220,38,38,.08)',
+        backgroundColor: 'rgba(220,38,38,.04)',
         borderWidth: 2.5,
-        pointRadius: 4,
+        pointRadius: 3,
         pointBackgroundColor: '#dc2626',
         pointBorderColor: '#fff',
-        pointBorderWidth: 2,
+        pointBorderWidth: 1.5,
         tension: 0.3,
         fill: true,
         yAxisID: 'yTPM',
@@ -28,12 +28,12 @@ const mainChart = new Chart(ctxMain, {
         label: 'Volume Sisa (ml)',
         data: chartVolume,
         borderColor: '#059669',
-        backgroundColor: 'rgba(5,150,105,.08)',
+        backgroundColor: 'rgba(5,150,105,.04)',
         borderWidth: 2.5,
-        pointRadius: 4,
+        pointRadius: 3,
         pointBackgroundColor: '#059669',
         pointBorderColor: '#fff',
-        pointBorderWidth: 2,
+        pointBorderWidth: 1.5,
         tension: 0.3,
         fill: true,
         yAxisID: 'yVol',
@@ -42,26 +42,21 @@ const mainChart = new Chart(ctxMain, {
   },
   options: {
     responsive: true,
+    maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: {
-        position: 'top',
-        labels: {
-          font: { size: 13, weight: 'bold' },
-          usePointStyle: true,
-          padding: 15,
-          color: '#1e293b',
-        },
+        display: false // Kita sembunyikan karena sudah diwakili oleh badge indikator HTML di atas canvas
       },
       tooltip: {
         backgroundColor: 'rgba(15, 23, 42, 0.95)',
         titleColor: '#fff',
         bodyColor: '#cbd5e1',
-        borderColor: '#64748b',
+        borderColor: '#e2e8f0',
         borderWidth: 1,
         padding: 12,
-        titleFont: { size: 13, weight: 'bold' },
-        bodyFont: { size: 12 },
+        titleFont: { size: 12, weight: 'bold', family: 'Plus Jakarta Sans' },
+        bodyFont: { size: 11, family: 'Plus Jakarta Sans' },
         displayColors: true,
         callbacks: {
           title: function(context) {
@@ -72,32 +67,35 @@ const mainChart = new Chart(ctxMain, {
     },
     scales: {
       x: {
-        ticks: { maxTicksLimit: 12, font: { size: 11 } },
-        grid: { color: 'rgba(0,0,0,.05)' },
+        bounds: 'data',
+        ticks: { 
+          maxTicksLimit: 10, 
+          font: { size: 10, family: 'Plus Jakarta Sans' }, 
+          color: '#94a3b8' 
+        },
+        grid: { color: 'rgba(241,245,249,0.8)' },
       },
       yTPM: {
         type: 'linear',
         position: 'left',
-        title: {
-          display: true,
-          text: 'TPM (Tetes/Menit)',
-          font: { size: 12, weight: 'bold' },
+        grid: { color: 'rgba(241,245,249,0.8)' },
+        ticks: { 
+          font: { size: 10, family: 'Plus Jakarta Sans', weight: 'bold' }, 
           color: '#dc2626',
+          mirror: true, // BUAT ANGKA SUMBU Y MASUK KE DALAM GRAFIK AGAR HEMAT RUANG
+          z: 10        // Memastikan angka berada di atas garis grafik
         },
-        grid: { color: 'rgba(0,0,0,.05)' },
-        ticks: { font: { size: 11 }, color: '#dc2626' },
       },
       yVol: {
         type: 'linear',
         position: 'right',
-        title: {
-          display: true,
-          text: 'Volume (ml)',
-          font: { size: 12, weight: 'bold' },
-          color: '#059669',
-        },
         grid: { drawOnChartArea: false },
-        ticks: { font: { size: 11 }, color: '#059669' },
+        ticks: { 
+          font: { size: 10, family: 'Plus Jakarta Sans', weight: 'bold' }, 
+          color: '#059669',
+          mirror: true,
+          z: 10
+        },
       },
     },
   },
@@ -134,6 +132,7 @@ async function refreshDetail() {
 
     const persen     = parseFloat(dev.persen      || 0);
     const volumeSisa = parseFloat(dev.volume_sisa  || 0);
+    const volumeAwal = parseFloat(dev.volume_awal  || 500);
     const tpm        = parseFloat(dev.tpm          || 0);
     const estJam     = parseInt(dev.estimasi_jam   || 0);
     const estMnt     = parseInt(dev.estimasi_mnt   || 0);
@@ -141,75 +140,102 @@ async function refreshDetail() {
     const lastUpdate = dev.created_at || null;
     const online     = isOnline(lastUpdate);
 
-    // --- update stat cards ---
-    const dTpm  = document.getElementById('d-tpm');
-    const dVol  = document.getElementById('d-volume');
-    const dEst  = document.getElementById('d-estimasi');
+    // --- 1. Update Stat Cards Text ---
+    const dTpm = document.getElementById('d-tpm');
+    const dVol = document.getElementById('d-volume');
+    const dEst = document.getElementById('d-estimasi');
 
-    if (dTpm)  dTpm.textContent  = Math.round(tpm);
-    if (dVol)  dVol.innerHTML   = `${Math.round(volumeSisa)} <span class="text-sm font-bold text-slate-400">ml</span>`;
-    if (dEst)  dEst.textContent  = `${estJam}j ${estMnt}m`;
+    if (dTpm) dTpm.textContent = Math.round(tpm);
+    if (dVol) dVol.innerHTML = Math.round(volumeSisa); // Angka utama sisa mili
+    if (dEst) dEst.textContent = `${estJam}j ${estMnt}m`;
 
-    // --- update bottle visual ---
-    const bottle = document.querySelector('.bottle-fluid');
-    if (bottle) {
-      bottle.style.height = Math.min(100, Math.max(0, persen)) + '%';
-      bottle.className = 'bottle-fluid';
-      if (persen <= 20) bottle.classList.add('blink-red');
-      else              bottle.style.background = 'linear-gradient(to right, #3b82f6, #60a5fa)';
-    }
-
-    // --- update persen text di bottle ---
-    const persenText = document.querySelector('.text-4xl.font-black.text-slate-800');
-    if (persenText) persenText.textContent = persen.toFixed(0) + '%';
-
-    // --- update online badge ---
-    const onlineBadge = document.getElementById('d-online-badge');
-    if (onlineBadge) {
-      if (online) {
-        onlineBadge.className = 'px-4 py-2 bg-emerald-100 text-emerald-700 rounded-xl text-xs font-black uppercase tracking-widest';
-        onlineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full inline-block mr-1 bg-emerald-500"></span>Online';
+    // --- 2. Update Bottle Visual Fluid & Color Level ---
+    const bottleFluid = document.getElementById('d-bottle-fluid');
+    if (bottleFluid) {
+      bottleFluid.style.height = Math.min(100, Math.max(0, persen)) + '%';
+      
+      // Reset Class Animasi & Atur Gradasi Warna Berdasarkan Persentase Infus
+      bottleFluid.className = "absolute bottom-0 inset-x-0 transition-all duration-1000 ease-in-out";
+      if (persen <= 20) {
+        bottleFluid.classList.add('animate-fluid-blink');
+        bottleFluid.style.background = 'linear-gradient(to top, #dc2626, #f87171)'; // Merah kritis
+      } else if (persen <= 50) {
+        bottleFluid.style.background = 'linear-gradient(to top, #d97706, #f59e0b)'; // Oranye peringatan
       } else {
-        onlineBadge.className = 'px-4 py-2 bg-slate-100 text-slate-500 rounded-xl text-xs font-black uppercase tracking-widest';
-        onlineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full inline-block mr-1 bg-slate-400"></span>Offline';
+        bottleFluid.style.background = 'linear-gradient(to top, #6b2072, #a855f7)'; // Ungu normal medis
       }
     }
 
-    // --- update last update indicator ---
-    const lastEl = document.getElementById('d-last-update');
-    if (lastEl) {
-      lastEl.innerHTML = `<i class="bi bi-clock-history mr-1"></i>Update: ${formatTime(lastUpdate)}`;
-      lastEl.classList.remove('hidden');
+    // --- 3. Update Persen Text ---
+    const persenText = document.getElementById('d-persen-text');
+    if (persenText) persenText.textContent = persen.toFixed(0) + '%';
+
+    // --- 4. Update Header Layout (Emergency Alert State) ---
+    const headerCard = document.getElementById('detail-header-card');
+    if (headerCard) {
+      if (nurseCall === 1) {
+        headerCard.className = "bg-white border border-red-200 rounded-2xl p-6 shadow-sm mb-6 transition-all duration-500 bg-red-50/20 ring-4 ring-red-500/5";
+      } else {
+        headerCard.className = "bg-white border border-slate-100 rounded-2xl p-6 shadow-sm mb-6 transition-all duration-500";
+      }
     }
 
-    // --- update nurse call card ---
-    const nurseCard   = document.getElementById('d-nurse-card');
-    const nurseStatus = document.getElementById('d-nurse-status');
-    const nurseHint   = document.getElementById('d-nurse-hint');
+    // --- 5. Update Badges (Online, Mode, Nurse Call) ---
+    const onlineBadge = document.getElementById('d-online-badge');
+    if (onlineBadge) {
+      if (online) {
+        onlineBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider border bg-emerald-50 text-emerald-700 border-emerald-200';
+        onlineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>CONNECTED';
+      } else {
+        onlineBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black tracking-wider border bg-slate-100 text-slate-500 border-slate-200';
+        onlineBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>OFFLINE';
+      }
+    }
+
+    const dNurseBadge = document.getElementById('d-nurse-badge');
+    if (dNurseBadge) {
+      if (nurseCall === 1) dNurseBadge.classList.remove('hidden');
+      else dNurseBadge.classList.add('hidden');
+    }
+
+    // --- 6. Update Last Update Indicator ---
+    const lastEl = document.getElementById('d-last-update');
+    if (lastEl) {
+      lastEl.innerHTML = `<i class="bi bi-clock-history mr-1"></i>Update Terakhir: ${formatTime(lastUpdate)}`;
+    }
+
+    // --- 7. Update Nurse Call Card Status ---
+    const nurseCard    = document.getElementById('d-nurse-card');
+    const nurseIconBox = document.getElementById('d-nurse-icon-box');
+    const nurseStatus  = document.getElementById('d-nurse-status');
+    const nurseHint    = document.getElementById('d-nurse-hint');
 
     if (nurseCard && nurseStatus) {
       if (nurseCall === 1) {
-        nurseCard.className = 'bg-red-600 text-white p-5 rounded-2xl transition-all border border-transparent';
-        nurseStatus.textContent = 'EMERGENCY CALL';
+        nurseCard.className = 'bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all duration-300 bg-red-50 border-red-200';
+        if (nurseIconBox) nurseIconBox.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base border bg-red-500 text-white border-red-600 animate-bounce';
+        nurseStatus.className = 'text-xl font-black tracking-tight text-red-600';
+        nurseStatus.textContent = 'EMERGENCY ALERT';
         if (nurseHint) nurseHint.classList.remove('hidden');
       } else {
-        nurseCard.className = 'bg-slate-50 text-slate-400 p-5 rounded-2xl transition-all border border-transparent';
-        nurseStatus.textContent = 'NORMAL';
+        nurseCard.className = 'bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col justify-between transition-all duration-300';
+        if (nurseIconBox) nurseIconBox.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base border bg-slate-50 text-slate-400 border-slate-100';
+        nurseStatus.className = 'text-xl font-black tracking-tight text-slate-400';
+        nurseStatus.textContent = 'STANDBY NORMAL';
         if (nurseHint) nurseHint.classList.add('hidden');
       }
     }
 
-    // --- ambil history terbaru untuk chart (50 data) ---
+    // --- 8. Fetch Realtime History for Chart Refresh (50 Data) ---
     const histRes  = await fetch(`api/get_history.php?device_id=${encodeURIComponent(deviceId)}&limit=50&_=${Date.now()}`, { cache: 'no-store' });
     const histJson = await histRes.json();
 
     if (histJson.status === 'ok' && histJson.data.length > 0) {
       cachedHistory = histJson.data;
 
-      // update chart
-      const labels  = histJson.data.map(h => formatTime(h.created_at));
-      const tpmArr  = histJson.data.map(h => parseFloat(h.tpm));
-      const volArr  = histJson.data.map(h => parseFloat(h.volume_sisa));
+      const labels = histJson.data.map(h => formatTime(h.created_at));
+      const tpmArr = histJson.data.map(h => parseFloat(h.tpm));
+      const volArr = histJson.data.map(h => parseFloat(h.volume_sisa));
 
       mainChart.data.labels           = labels;
       mainChart.data.datasets[0].data = tpmArr;
@@ -227,23 +253,28 @@ function updateLogTable(data) {
   const tbody = document.getElementById('log-tbody');
   if (!tbody) return;
 
-  // tampilkan dari terbaru ke terlama, max 10
   const reversed = [...data].reverse().slice(0, 10);
 
   tbody.innerHTML = reversed.map(h => {
     const persen = parseFloat(h.persen || 0);
-    const barColor = persen > 20 ? 'bg-blue-500' : 'bg-red-500';
+    const barColor = persen > 50 ? '#6b2072' : (persen > 20 ? '#f59e0b' : '#ef4444');
     return `
-      <tr class="hover:bg-slate-50/50 transition-all">
-        <td class="px-8 py-4 text-xs font-bold text-slate-500 tracking-tighter">${formatTime(h.created_at)}</td>
-        <td class="px-8 py-4"><span class="text-sm font-black text-slate-800">${Math.round(h.tpm)}</span> <span class="text-[9px] font-bold text-slate-400 ml-1">TPM</span></td>
-        <td class="px-8 py-4"><span class="text-sm font-black text-slate-800">${Math.round(h.volume_sisa)}</span> <span class="text-[9px] font-bold text-slate-400 ml-1">ML</span></td>
-        <td class="px-8 py-4 text-right">
+      <tr class="hover:bg-slate-50/50 transition-colors">
+        <td class="p-4 pl-6 text-xs font-bold text-slate-500 font-mono tabular-nums">${formatTime(h.created_at)}</td>
+        <td class="p-4">
+          <span class="text-sm font-black text-slate-900 font-mono">${Math.round(h.tpm)}</span>
+          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide ml-0.5">TPM</span>
+        </td>
+        <td class="p-4">
+          <span class="text-sm font-black text-slate-900 font-mono">${Math.round(h.volume_sisa)}</span>
+          <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wide ml-0.5">ml</span>
+        </td>
+        <td class="p-4 pr-6 text-right">
           <div class="inline-flex items-center gap-3">
-            <div class="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div class="h-full ${barColor}" style="width: ${Math.min(100, persen)}%"></div>
+            <div class="w-20 h-1.5 bg-slate-100 border border-slate-200/40 rounded-full overflow-hidden hidden sm:block">
+              <div class="h-full rounded-full transition-all duration-500" style="width:${Math.min(100, persen)}%; background:${barColor};"></div>
             </div>
-            <span class="text-xs font-black text-slate-700 w-8">${persen.toFixed(0)}%</span>
+            <span class="text-xs font-black text-slate-900 font-mono min-w-[35px] text-right">${persen.toFixed(0)}%</span>
           </div>
         </td>
       </tr>
@@ -282,10 +313,10 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
-// Refresh chart setiap 5 detik
+// Realtime loop interval utama (per 5 detik)
 setInterval(refreshDetail, 5000);
 
-// ===== REFRESH LOG TABEL — setiap 10 menit =====
+// ===== REFRESH LOG TABEL — setiap 5 menit (dioptimalkan dari 10 mnt agar sinkron) =====
 async function refreshLogTable() {
   try {
     const res  = await fetch(`api/get_history.php?device_id=${encodeURIComponent(deviceId)}&limit=10&_=${Date.now()}`, { cache: 'no-store' });
@@ -299,5 +330,5 @@ async function refreshLogTable() {
   }
 }
 
-setInterval(refreshLogTable, 600000); // setiap 10 menit
-refreshLogTable();                    // load awal
+setInterval(refreshLogTable, 300000); // 5 Menit
+refreshLogTable(); // Panggilan pertama pasca halaman dimuat

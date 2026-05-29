@@ -1,6 +1,6 @@
 <?php
 // =====================================================
-// HALAMAN SETTINGS — KONFIGURASI SISTEM
+// HALAMAN SETTINGS — KONFIGURASI SISTEM (OPTIMIZED UX)
 // =====================================================
 
 require_once __DIR__ . '/config/db.php';
@@ -11,14 +11,21 @@ $message = '';
 $msgType = 'success';
 $testResult = null;
 
-// ===== PROSES FORM SAVE =====
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// ===== HELPER ESCAPING =====
+if (!function_exists('esc')) {
+    function esc($string) {
+        return htmlspecialchars($string ?? '', ENT_QUOTES, 'UTF-8');
+    }
+}
 
+// ===== PROSES FORM SAVE & ACTION =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     if ($action === 'save_settings') {
         $fields = [
-            'fonnte_token',
+            'wa_api_url',
+            'wa_api_key',
             'wa_nurse_call_msg',
             'wa_low_volume_msg',
         ];
@@ -27,23 +34,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 setSetting($f, trim($_POST[$f]));
             }
         }
-        $message = 'Pengaturan berhasil disimpan!';
+        $message = 'Konfigurasi parameter klinis berhasil disimpan!';
     }
 
     // ===== TEST KIRIM WA =====
     elseif ($action === 'test_wa') {
         $testTarget = trim($_POST['test_target'] ?? '');
         if (empty($testTarget)) {
-            $message = 'Masukkan nomor tujuan untuk test!';
+            $message = 'Masukkan nomor telepon tujuan untuk melakukan pengujian!';
             $msgType = 'danger';
         } else {
-            $testMsg = "✅ *TEST NOTIFIKASI*\nSmart Infus Monitoring System\nWaktu: " . date('d/m/Y H:i:s') . "\n\nKonfigurasi WhatsApp berhasil!";
+            $testMsg = "✅ *TEST NOTIFIKASI SYSTEM*\nSmart Infus — Central Monitor\nWaktu: " . date('d/m/Y H:i:s') . "\n\nIntegrasi API WhatsApp Gateway berhasil terhubung!";
             $result  = sendWhatsApp($testTarget, $testMsg);
             if ($result['success']) {
-                $message    = "Pesan test berhasil dikirim ke $testTarget!";
+                $message    = "Pesan uji coba sukses terkirim ke target: $testTarget";
                 $testResult = $result;
             } else {
-                $message    = 'Gagal kirim: ' . ($result['error'] ?? json_encode($result['response'] ?? ''));
+                $message    = 'Koneksi API Gagal: ' . ($result['error'] ?? json_encode($result['response'] ?? ''));
                 $msgType    = 'danger';
                 $testResult = $result;
             }
@@ -51,10 +58,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$settings = getAllSettings();
-$token    = $settings['fonnte_token']      ?? '';
-$msgNC    = $settings['wa_nurse_call_msg'] ?? '';
-$msgLV    = $settings['wa_low_volume_msg'] ?? '';
+$settings   = getAllSettings();
+$apiUrl     = $settings['wa_api_url']     ?? '';
+$apiKey     = $settings['wa_api_key']     ?? '';
+if (empty($apiKey) && !empty($settings['fonnte_token'] ?? '')) {
+    $apiKey = $settings['fonnte_token'];
+}
+$msgNC      = $settings['wa_nurse_call_msg'] ?? '';
+$msgLV      = $settings['wa_low_volume_msg'] ?? '';
 $activePage = 'settings';
 ?>
 <!DOCTYPE html>
@@ -62,283 +73,306 @@ $activePage = 'settings';
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Settings — Smart Infus</title>
+  <title>System Settings — Central Monitoring Station</title>
+  
+  <!-- Local Tailwind CSS -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+  
+  <!-- Typography & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #0f1117; color: #f1f5f9; min-height: 100vh; }
-    ::-webkit-scrollbar { width: 5px; }
-    ::-webkit-scrollbar-track { background: #0f1117; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-
-    /* NAV */
-    .si-nav { position: sticky; top: 0; z-index: 50; background: rgba(15,17,23,0.9); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.06); }
-    .si-nav-inner { max-width: 1280px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; gap: 32px; }
-    .si-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; flex-shrink: 0; }
-    .si-brand-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #2563eb, #3b82f6); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; box-shadow: 0 0 16px rgba(59,130,246,0.4); }
-    .si-brand-name { font-size: 14px; font-weight: 800; color: #f1f5f9; letter-spacing: 0.05em; line-height: 1; }
-    .si-brand-sub  { font-size: 9px; font-weight: 600; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2px; }
-    .si-nav-links  { display: flex; align-items: center; gap: 4px; flex: 1; }
-    .si-nav-link { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #64748b; text-decoration: none; transition: all 0.15s; }
-    .si-nav-link:hover { color: #f1f5f9; background: rgba(255,255,255,0.06); }
-    .si-nav-link.active { color: #3b82f6; background: rgba(59,130,246,0.12); }
-    .si-nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-
-    /* CARDS */
-    .si-card { background: #1a1d27; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; }
-
-    /* INPUTS */
-    .si-input { width: 100%; background: #21253a; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px; color: #f1f5f9; font-size: 13px; font-family: inherit; transition: border-color .15s, box-shadow .15s; outline: none; }
-    .si-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
-    .si-input::placeholder { color: #475569; }
-    .si-input-mono { font-family: 'Courier New', monospace; }
-    .si-label { font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: .08em; display: block; margin-bottom: 6px; }
-
-    /* BUTTONS */
-    .si-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 10px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; transition: all .15s; text-decoration: none; font-family: inherit; }
-    .si-btn-primary { background: #2563eb; color: white; }
-    .si-btn-primary:hover { background: #1d4ed8; box-shadow: 0 0 16px rgba(37,99,235,0.4); }
-    .si-btn-success { background: #059669; color: white; }
-    .si-btn-success:hover { background: #047857; }
-  </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0">
 
-  <!-- NAVBAR -->
-  <nav class="si-nav">
-    <div class="si-nav-inner">
-      <a href="index.php" class="si-brand">
-        <div class="si-brand-icon"><i class="bi bi-droplet-fill"></i></div>
+  <!-- TOP CLINICAL NAVBAR -->
+  <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Identity -->
+      <a href="index.php" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
+          <i class="bi bi-droplet-fill text-lg"></i>
+        </div>
         <div>
-          <div class="si-brand-name">SMART INFUS</div>
-          <div class="si-brand-sub">Medical Monitor</div>
+          <div class="text-xs font-black tracking-wider text-slate-900 uppercase">Smart Infus</div>
+          <div class="text-[10px] font-bold text-[#6b2072] tracking-widest uppercase">Central Station</div>
         </div>
       </a>
-      <div class="si-nav-links">
-        <a href="index.php" class="si-nav-link <?= $activePage==='dashboard'?'active':'' ?>"><i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span></a>
-        <a href="devices.php" class="si-nav-link <?= $activePage==='devices'?'active':'' ?>"><i class="bi bi-cpu-fill"></i><span>Devices</span></a>
-        <a href="settings.php" class="si-nav-link <?= $activePage==='settings'?'active':'' ?>"><i class="bi bi-sliders"></i><span>Settings</span></a>
+
+      <!-- Navigation Menu -->
+      <div class="hidden md:flex items-center gap-1">
+        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
+        </a>
+        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-cpu-fill"></i><span>Devices</span>
+        </a>
+        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-sliders"></i><span>Settings</span>
+        </a>
       </div>
-      <div class="si-nav-right"></div>
+
+      <!-- Realtime Clock & Status Counter -->
+      <div class="flex items-center gap-4">
+        <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+          <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
+        </div>
+      </div>
     </div>
   </nav>
 
-  <div style="max-width:800px;margin:0 auto;padding:32px 24px;display:flex;flex-direction:column;gap:24px">
+  <!-- MOBILE BOTTOM NAVIGATION -->
+  <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
+    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-grid-1x2-fill text-lg"></i>
+      <span>Dashboard</span>
+    </a>
+    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-cpu-fill text-lg"></i>
+      <span>Devices</span>
+    </a>
+    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-sliders text-lg"></i>
+      <span>Settings</span>
+    </a>
+  </div>
 
-    <!-- ALERT -->
+  <!-- MAIN WORKSPACE CONTAINER -->
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
+    <!-- SYSTEM ALERT NOTIFICATION -->
     <?php if ($message): ?>
-    <div style="padding:14px 18px;border-radius:12px;display:flex;align-items:center;gap:10px;<?= $msgType === 'success' ? 'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);color:#10b981' : 'background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.25);color:#ef4444' ?>">
-      <i class="bi bi-<?= $msgType === 'success' ? 'check2-circle' : 'exclamation-circle' ?>" style="font-size:16px;flex-shrink:0"></i>
-      <span style="font-size:13px;font-weight:700"><?= htmlspecialchars($message) ?></span>
+    <div class="p-4 rounded-xl flex items-center gap-3 border transition-all <?= $msgType === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800' ?>">
+      <i class="bi bi-<?= $msgType === 'success' ? 'check2-circle' : 'exclamation-circle' ?> text-lg flex-shrink-0"></i>
+      <span class="text-xs font-bold tracking-wide"><?= esc($message) ?></span>
     </div>
     <?php endif; ?>
 
-    <!-- FONNTE CONFIG CARD -->
-    <form method="POST" action="settings.php">
-      <input type="hidden" name="action" value="save_settings" />
+    <!-- TWO-COLUMN DASHBOARD LAYOUT FOR DESKTOP -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      
+      <!-- ================= LEFT COLUMN: CONFIGURATION FORM (7 COLS) ================= -->
+      <div class="lg:col-span-7">
+        <form method="POST" action="settings.php" class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <input type="hidden" name="action" value="save_settings" />
 
-      <div class="si-card" style="overflow:hidden">
-        <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px">
-          <div style="width:36px;height:36px;background:rgba(37,211,102,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">
-            <i class="bi bi-whatsapp" style="color:#25d366;font-size:16px"></i>
-          </div>
-          <div>
-            <div style="font-size:14px;font-weight:800;color:#f1f5f9">Konfigurasi WhatsApp (Fonnte)</div>
-            <div style="font-size:11px;color:#475569;margin-top:2px">
-              Dapatkan token di <a href="https://fonnte.com" target="_blank" style="color:#25d366;font-weight:700;text-decoration:none">fonnte.com</a> → Dashboard → Device → Token
+          <!-- Card Header -->
+          <div class="p-4.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+            <div class="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center border border-emerald-100">
+              <i class="bi bi-whatsapp text-base"></i>
+            </div>
+            <div>
+              <h2 class="text-xs font-black text-slate-900 tracking-wider uppercase">Konfigurasi WhatsApp Gateway</h2>
+              <p class="text-[10px] font-bold text-slate-400 tracking-wide uppercase">
+                WhatsApp Gateway: custom API / local gateway
+              </p>
             </div>
           </div>
-        </div>
 
-        <div style="padding:24px;display:flex;flex-direction:column;gap:20px">
+          <!-- Card Body Content -->
+          <div class="p-5 flex flex-col gap-5">
+            
+            <!-- Field 1: Gateway URL -->
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <i class="bi bi-link-45deg text-[#6b2072] mr-1"></i> Gateway API URL
+              </label>
+              <input type="text" name="wa_api_url" id="wa_api_url"
+                     value="<?= esc($apiUrl) ?>"
+                     placeholder="Contoh: http://localhost:3000/api/whatsapp"
+                     class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5" />
+            </div>
 
-          <!-- Token -->
-          <div>
-            <label class="si-label"><i class="bi bi-key-fill" style="margin-right:4px"></i>Fonnte API Token</label>
-            <div style="position:relative">
-              <input type="password" name="fonnte_token" id="fonnte_token"
-                     value="<?= htmlspecialchars($token) ?>"
-                     placeholder="Masukkan token Fonnte kamu..."
-                     class="si-input si-input-mono"
-                     style="padding-right:44px" />
-              <button type="button" onclick="toggleToken()"
-                      style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#475569;cursor:pointer;padding:4px;transition:color .15s"
-                      onmouseover="this.style.color='#94a3b8'" onmouseout="this.style.color='#475569'">
-                <i class="bi bi-eye" id="token-eye"></i>
+            <!-- Field 2: API Key -->
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <i class="bi bi-key-fill text-[#6b2072] mr-1"></i> WhatsApp API Key
+              </label>
+              <div class="relative">
+                <input type="password" name="wa_api_key" id="wa_api_key"
+                       value="<?= esc($apiKey) ?>"
+                       placeholder="Masukkan API Key Gateway WhatsApp..."
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl pl-4 pr-12 py-2.5 text-xs font-semibold font-mono text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5" />
+                <button type="button" onclick="toggleTokenVisibility()"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1 text-xs transition-colors">
+                  <i class="bi bi-eye" id="token-eye-icon"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Token Status Badge Indicator -->
+            <div class="p-3.5 rounded-xl border flex items-center gap-3 <?= !empty($apiKey) ? 'bg-emerald-50/50 border-emerald-100 text-emerald-800' : 'bg-amber-50/50 border-amber-100 text-amber-800' ?>">
+              <i class="bi bi-<?= !empty($apiKey) ? 'patch-check-fill text-emerald-600' : 'exclamation-triangle-fill text-amber-500' ?> text-base flex-shrink-0"></i>
+              <div>
+                <div class="text-xs font-bold"><?= !empty($apiKey) ? 'API Key Aktif' : 'API Key Belum Terpasang' ?></div>
+                <div class="text-[10px] font-medium text-slate-500 mt-0.5 leading-relaxed">
+                  <?= !empty($apiKey) ? 'Gateway siap menerima notifikasi nurse call dan peringatan kritis.' : 'Notifikasi WhatsApp tidak aktif sampai API Key terpasang.' ?>
+                </div>
+              </div>
+            </div>
+
+            <!-- Field 2: Template Nurse Call -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <span class="w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse"></span> Template — Nurse Call Emergency
+              </label>
+              <textarea name="wa_nurse_call_msg" rows="3"
+                        class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl p-3.5 text-xs font-semibold font-mono text-slate-700 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 placeholder:text-slate-400"
+                        placeholder="Contoh: Panggilan Suster dari kamar..."><?= esc($msgNC) ?></textarea>
+              <div class="mt-1.5 flex flex-wrap gap-1 items-center">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{pasien}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{lokasi}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{waktu}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{device}</code>
+              </div>
+            </div>
+
+            <!-- Field 3: Template Low Volume -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> Template — Volume Kritis (&le; 10ml)
+              </label>
+              <textarea name="wa_low_volume_msg" rows="3"
+                        class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl p-3.5 text-xs font-semibold font-mono text-slate-700 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 placeholder:text-slate-400"
+                        placeholder="Contoh: Peringatan volume sisa sedikit..."><?= esc($msgLV) ?></textarea>
+              <div class="mt-1.5 flex flex-wrap gap-1 items-center">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{pasien}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{lokasi}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{volume}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{persen}</code>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-2 border-t border-slate-100">
+              <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-[#6b2072] hover:bg-[#541859] text-white rounded-xl text-xs font-bold tracking-wide shadow-md shadow-[#6b2072]/10 active:scale-[0.99] transition-all cursor-pointer">
+                <i class="bi bi-save2-fill"></i> SIMPAN PARAMETER KLINIS
               </button>
             </div>
-            <div style="font-size:10px;color:#475569;margin-top:5px">
-              <i class="bi bi-info-circle" style="margin-right:3px"></i>Token bersifat rahasia. Jangan bagikan ke orang lain.
-            </div>
-          </div>
 
-          <!-- Status token -->
-          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;<?= !empty($token) ? 'background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2)' : 'background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2)' ?>">
-            <i class="bi bi-<?= !empty($token) ? 'check-circle-fill' : 'exclamation-triangle-fill' ?>" style="font-size:16px;color:<?= !empty($token) ? '#10b981' : '#f59e0b' ?>;flex-shrink:0"></i>
+          </div>
+        </form>
+      </div>
+
+      <!-- ================= RIGHT COLUMN: UTILITIES & TESTING (5 COLS) ================= -->
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        
+        <!-- TEST GATEWAY CARD -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-4.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+            <div class="w-9 h-9 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100">
+              <i class="bi bi-send-check text-base"></i>
+            </div>
             <div>
-              <div style="font-size:12px;font-weight:700;color:<?= !empty($token) ? '#10b981' : '#f59e0b' ?>">
-                <?= !empty($token) ? 'Token sudah dikonfigurasi' : 'Token belum dikonfigurasi' ?>
+              <h2 class="text-xs font-black text-slate-900 tracking-wider uppercase">Uji Validasi API</h2>
+              <p class="text-[10px] font-bold text-slate-400 tracking-wide uppercase">Verifikasi transmisi data jaringan</p>
+            </div>
+          </div>
+
+          <form method="POST" action="settings.php" class="p-5 flex flex-col gap-3.5">
+            <input type="hidden" name="action" value="test_wa" />
+            
+            <div class="flex flex-col gap-2.5">
+              <div class="relative flex-1">
+                <i class="bi bi-telephone text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 text-xs"></i>
+                <input type="text" name="test_target"
+                       placeholder="Target: 628123456789"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5" />
               </div>
-              <div style="font-size:10px;color:<?= !empty($token) ? '#059669' : '#d97706' ?>;margin-top:2px">
-                <?= !empty($token) ? 'Notifikasi WhatsApp siap digunakan' : 'Isi token untuk mengaktifkan notifikasi WhatsApp' ?>
-              </div>
+              <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold tracking-wide active:scale-95 transition-all cursor-pointer">
+                <i class="bi bi-cursor-fill"></i> RUNNING GATEWAY TEST
+              </button>
+            </div>
+            <span class="text-[9px] font-medium text-slate-400 leading-relaxed block">
+              <i class="bi bi-exclamation-circle text-amber-500"></i> Gunakan kode negara tanpa spasi/simbol (Contoh: <span class="font-bold text-slate-600">628xxx</span>).
+            </span>
+
+            <!-- API Debug Response Panel (Hanya muncul jika test di-run) -->
+            <?php if ($testResult !== null): ?>
+            <div class="mt-1 p-3.5 bg-slate-900 rounded-xl border border-slate-800">
+              <div class="text-[9px] font-black text-slate-500 tracking-widest uppercase mb-1.5">Response Logger:</div>
+              <pre class="text-[11px] text-emerald-400 font-mono overflow-x-auto whitespace-pre-wrap max-h-40"><?= esc(json_encode($testResult, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
+            </div>
+            <?php endif; ?>
+          </form>
+        </div>
+
+        <!-- REPOSITIONED DOCUMENTATION PANEL -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-4.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2.5">
+            <i class="bi bi-info-circle-fill text-amber-500 text-base"></i>
+            <h2 class="text-xs font-black text-slate-900 tracking-wider uppercase">Panduan & Trigger</h2>
+          </div>
+          
+          <div class="p-5 flex flex-col gap-4">
+            <!-- Sync step -->
+            <div>
+              <h3 class="text-[10px] font-black text-slate-400 tracking-wider uppercase mb-2">Sinkronisasi</h3>
+              <ol class="flex flex-col gap-1.5 text-xs font-medium text-slate-600">
+                <li class="flex gap-1.5"><span class="text-[#6b2072] font-bold">1.</span> Siapkan WhatsApp Gateway API yang akan menerima request dari sistem.</li>
+                <li class="flex gap-1.5"><span class="text-[#6b2072] font-bold">2.</span> Masukkan URL gateway pada kolom "Gateway API URL".</li>
+                <li class="flex gap-1.5"><span class="text-[#6b2072] font-bold">3.</span> Masukkan API Key yang digunakan untuk autentikasi request.</li>
+              </ol>
+            </div>
+
+            <hr class="border-slate-100" />
+
+            <!-- Logic context -->
+            <div>
+              <h3 class="text-[10px] font-black text-slate-400 tracking-wider uppercase mb-2">Aturan Notifikasi</h3>
+              <ul class="flex flex-col gap-2 text-xs font-medium text-slate-600">
+                <li class="flex gap-2 items-start">
+                  <i class="bi bi-bell-fill text-rose-500 mt-0.5 text-xs flex-shrink-0"></i>
+                  <span>Trigger <span class="font-bold">Nurse Call</span> aktif seketika saat tombol kecemasan pasien ditekan.</span>
+                </li>
+                <li class="flex gap-2 items-start">
+                  <i class="bi bi-droplet-half text-amber-500 mt-0.5 text-xs flex-shrink-0"></i>
+                  <span>Trigger <span class="font-bold">Volume Sisa</span> jalan otomatis jika infus terdeteksi sisa &le; 10 ml.</span>
+                </li>
+              </ul>
             </div>
           </div>
-
-          <!-- Template Nurse Call -->
-          <div>
-            <label class="si-label">
-              <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-right:6px;vertical-align:middle"></span>
-              Template Pesan — Nurse Call
-            </label>
-            <textarea name="wa_nurse_call_msg" rows="5"
-                      class="si-input si-input-mono"
-                      placeholder="Template pesan nurse call..."><?= htmlspecialchars($msgNC) ?></textarea>
-            <div style="font-size:10px;color:#475569;margin-top:5px">
-              Placeholder:
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{pasien}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{lokasi}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{waktu}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{device}</code>
-            </div>
-          </div>
-
-          <!-- Template Low Volume -->
-          <div>
-            <label class="si-label">
-              <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#f59e0b;margin-right:6px;vertical-align:middle"></span>
-              Template Pesan — Volume Kritis (≤ 10 ml)
-            </label>
-            <textarea name="wa_low_volume_msg" rows="6"
-                      class="si-input si-input-mono"
-                      placeholder="Template pesan volume kritis..."><?= htmlspecialchars($msgLV) ?></textarea>
-            <div style="font-size:10px;color:#475569;margin-top:5px">
-              Placeholder:
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{pasien}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{lokasi}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{volume}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{persen}</code>
-              <code style="background:#21253a;padding:1px 5px;border-radius:4px;font-size:10px">{waktu}</code>
-            </div>
-          </div>
-
-          <!-- Simpan -->
-          <button type="submit" class="si-btn si-btn-primary" style="width:100%;justify-content:center;padding:12px 20px;font-size:13px">
-            <i class="bi bi-save2-fill"></i> SIMPAN PENGATURAN
-          </button>
-
-        </div>
-      </div>
-    </form>
-
-    <!-- TEST WA CARD -->
-    <div class="si-card" style="overflow:hidden">
-      <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:12px">
-        <div style="width:36px;height:36px;background:rgba(59,130,246,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center">
-          <i class="bi bi-send-check" style="color:#3b82f6;font-size:16px"></i>
-        </div>
-        <div>
-          <div style="font-size:14px;font-weight:800;color:#f1f5f9">Test Kirim WhatsApp</div>
-          <div style="font-size:11px;color:#475569;margin-top:2px">Kirim pesan test untuk memverifikasi konfigurasi token</div>
-        </div>
-      </div>
-
-      <form method="POST" action="settings.php" style="padding:24px">
-        <input type="hidden" name="action" value="test_wa" />
-        <div style="display:flex;gap:10px">
-          <div style="flex:1;position:relative">
-            <i class="bi bi-phone" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#475569;font-size:13px"></i>
-            <input type="text" name="test_target"
-                   placeholder="628123456789 (format internasional)"
-                   class="si-input"
-                   style="padding-left:36px" />
-          </div>
-          <button type="submit" class="si-btn si-btn-success" style="white-space:nowrap">
-            <i class="bi bi-whatsapp"></i> KIRIM TEST
-          </button>
-        </div>
-        <div style="font-size:10px;color:#475569;margin-top:6px">
-          <i class="bi bi-info-circle" style="margin-right:3px"></i>
-          Gunakan format internasional tanpa tanda + (contoh: 628123456789)
         </div>
 
-        <?php if ($testResult !== null): ?>
-        <div style="margin-top:16px;padding:14px;background:#21253a;border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
-          <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Response API:</div>
-          <pre style="font-size:11px;color:#94a3b8;font-family:'Courier New',monospace;overflow-x:auto;white-space:pre-wrap"><?= htmlspecialchars(json_encode($testResult, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
-        </div>
-        <?php endif; ?>
-      </form>
-    </div>
-
-    <!-- PANDUAN CARD -->
-    <div class="si-card" style="overflow:hidden">
-      <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;gap:10px">
-        <i class="bi bi-lightbulb-fill" style="color:#f59e0b;font-size:18px"></i>
-        <div style="font-size:14px;font-weight:800;color:#f1f5f9">Panduan Penggunaan</div>
-      </div>
-      <div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
-        <div>
-          <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">Cara Mendapatkan Token Fonnte</div>
-          <ol style="list-style:none;display:flex;flex-direction:column;gap:8px">
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="color:#3b82f6;font-weight:700;flex-shrink:0">1.</span> Daftar di <span style="color:#3b82f6;font-weight:600">fonnte.com</span>
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="color:#3b82f6;font-weight:700;flex-shrink:0">2.</span> Tambahkan device WhatsApp kamu
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="color:#3b82f6;font-weight:700;flex-shrink:0">3.</span> Scan QR code untuk menghubungkan WA
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="color:#3b82f6;font-weight:700;flex-shrink:0">4.</span> Salin token dari halaman Device
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="color:#3b82f6;font-weight:700;flex-shrink:0">5.</span> Tempel token di kolom di atas
-            </li>
-          </ol>
-        </div>
-        <div>
-          <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">Kapan Notifikasi Dikirim?</div>
-          <ul style="list-style:none;display:flex;flex-direction:column;gap:8px">
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="flex-shrink:0">🚨</span> Saat tombol Nurse Call ditekan pasien
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="flex-shrink:0">⚠️</span> Saat volume infus ≤ 10 ml (sekali per sesi)
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="flex-shrink:0">📱</span> Dikirim ke nomor suster &amp; keluarga pasien
-            </li>
-            <li style="display:flex;gap:8px;font-size:12px;color:#64748b">
-              <span style="flex-shrink:0">🔄</span> Alert volume reset otomatis saat infus diganti
-            </li>
-          </ul>
-        </div>
       </div>
     </div>
 
-  </div><!-- /container -->
+  </main>
 
-  <footer style="padding:32px 24px;text-align:center">
-    <p style="font-size:10px;font-weight:700;color:#334155;text-transform:uppercase;letter-spacing:.2em">&copy; <?= date('Y') ?> Smart Infus Monitoring System</p>
+  <!-- MEDICAL WORKSTATION FOOTER -->
+  <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-center">
+    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
 
+  <!-- ACTION LOGIC: VISIBILITY TOGGLE -->
   <script>
-    function toggleToken() {
-      const inp = document.getElementById('fonnte_token');
-      const eye = document.getElementById('token-eye');
-      if (inp.type === 'password') {
-        inp.type = 'text';
-        eye.className = 'bi bi-eye-slash';
+    function toggleTokenVisibility() {
+      const input = document.getElementById('wa_api_key');
+      const icon = document.getElementById('token-eye-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'bi bi-eye-slash';
       } else {
-        inp.type = 'password';
-        eye.className = 'bi bi-eye';
+        input.type = 'password';
+        icon.className = 'bi bi-eye';
       }
     }
+  </script>
+
+  <script>
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2,'0');
+      const m = String(now.getMinutes()).padStart(2,'0');
+      const s = String(now.getSeconds()).padStart(2,'0');
+      const el = document.getElementById('clockText');
+      if (el) el.textContent = h + ':' + m + ':' + s;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
   </script>
 </body>
 </html>
