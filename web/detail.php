@@ -86,7 +86,9 @@ $activePage = 'dashboard';
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0 font-sans antialiased">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0 font-sans antialiased"
+  data-detail-pasien="<?= htmlspecialchars($device['pasien']) ?>"
+  data-detail-lokasi="<?= htmlspecialchars($device['lokasi']) ?>">
 
   <!-- TOP CLINICAL NAVBAR -->
   <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
@@ -114,6 +116,9 @@ $activePage = 'dashboard';
         <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
           <i class="bi bi-sliders"></i><span>Settings</span>
         </a>
+        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
+        </a>
       </div>
 
       <!-- Realtime Clock & Status Counter -->
@@ -139,12 +144,16 @@ $activePage = 'dashboard';
       <i class="bi bi-sliders text-lg"></i>
       <span>Settings</span>
     </a>
+    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-book-half text-lg"></i>
+      <span>Dokumentasi</span>
+    </a>
   </div>
 
   <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
 
     <!-- HEADER: Pasien Info Card -->
-    <div id="detail-header-card" class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm mb-6 transition-all duration-500 <?= $nurseCall ? 'border-red-200 bg-red-50/20 ring-4 ring-red-500/5' : '' ?>">
+    <div id="detail-header-card" class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm mb-6 transition-all duration-500 <?= ($nurseCall && $isOnline) ? 'border-red-200 bg-red-50/20 ring-4 ring-red-500/5' : '' ?>">
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div class="text-[10px] font-black text-[#6b2072] uppercase tracking-widest mb-1">Identitas Pasien</div>
@@ -166,9 +175,7 @@ $activePage = 'dashboard';
             <span class="w-1.5 h-1.5 rounded-full <?= $isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400' ?>"></span>
             <?= $isOnline ? 'CONNECTED' : 'OFFLINE' ?>
           </span>
-          <span id="d-nurse-badge" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-black text-white tracking-wider bg-red-500 border border-red-600 animate-medical-pulse <?= $nurseCall ? '' : 'hidden' ?>">
-            <i class="bi bi-bell-fill text-[9px]"></i> NURSE CALL
-          </span>
+          
           <button onclick="refreshDetail()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-600 text-[10px] font-black tracking-wider rounded-lg transition-colors">
             <i class="bi bi-arrow-repeat"></i> REFRESH
           </button>
@@ -182,9 +189,9 @@ $activePage = 'dashboard';
       <!-- Bottle Card -->
       <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm flex flex-col items-center justify-center gap-4 lg:col-span-1">
         <div class="w-20 h-44 bg-slate-100 border-2 border-slate-200/80 rounded-t-xl rounded-b-3xl relative overflow-hidden shadow-inner shadow-slate-200/50">
-          <div id="d-bottle-fluid" class="absolute bottom-0 inset-x-0 transition-all duration-1000 ease-in-out <?= $persen <= 20 ? 'animate-fluid-blink' : '' ?>"
-               style="height:<?= $persen ?>%; background:<?= $persen > 50 ? 'linear-gradient(to top, #6b2072, #a855f7)' : ($persen > 20 ? 'linear-gradient(to top, #d97706, #f59e0b)' : 'linear-gradient(to top, #dc2626, #f87171)') ?>">
-            <div class="absolute top-0 inset-x-0 h-1.5 bg-white/20 blur-[1px]"></div>
+          <div id="d-bottle-fluid"
+               style="position:absolute; bottom:0; left:0; right:0; width:100%; height:<?= $persen ?>%; transition:height 1s ease-in-out; background:<?= $persen > 50 ? 'linear-gradient(to top,#6b2072,#a855f7)' : ($persen > 20 ? 'linear-gradient(to top,#d97706,#f59e0b)' : 'linear-gradient(to top,#dc2626,#f87171)') ?>; <?= $persen <= 20 ? 'animation:fluid-blink 1.5s infinite;' : '' ?>">
+            <div style="position:absolute; top:0; left:0; right:0; width:100%; height:6px; background:rgba(255,255,255,0.2);"></div>
           </div>
         </div>
         <div class="text-center">

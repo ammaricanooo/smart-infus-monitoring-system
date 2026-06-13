@@ -7,6 +7,25 @@ require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/settings.php';
 require_once __DIR__ . '/config/whatsapp.php';
 
+// ===== AUTO-MIGRATION INDEXES =====
+try {
+    $db = getDB();
+    
+    // Check and create idx_device_created_at index on infus_data
+    $idx1 = $db->query("SHOW INDEXES FROM infus_data WHERE Key_name = 'idx_device_created_at'")->fetch();
+    if (!$idx1) {
+        $db->exec("ALTER TABLE infus_data ADD INDEX idx_device_created_at (device_id, created_at)");
+    }
+    
+    // Check and create idx_ncl_device_status index on nurse_call_log
+    $idx2 = $db->query("SHOW INDEXES FROM nurse_call_log WHERE Key_name = 'idx_ncl_device_status'")->fetch();
+    if (!$idx2) {
+        $db->exec("ALTER TABLE nurse_call_log ADD INDEX idx_ncl_device_status (device_id, status)");
+    }
+} catch (\Throwable $e) {
+    error_log("Failed to auto-migrate indexes: " . $e->getMessage());
+}
+
 $message = '';
 $msgType = 'success';
 $testResult = null;
@@ -28,6 +47,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'wa_api_key',
             'wa_nurse_call_msg',
             'wa_low_volume_msg',
+            'wa_tpm_zero_msg',
+            'wa_tpm_high_msg',
+            'wa_resolved_msg',
+            'db_infus_data_retention',
+            'db_nurse_log_retention',
         ];
         foreach ($fields as $f) {
             if (isset($_POST[$f])) {
@@ -56,6 +80,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+
+    // ===== OPTIMIZE DATABASE =====
+    elseif ($action === 'optimize_db') {
+        try {
+            $db = getDB();
+            
+            $infusDays = (int)getSetting('db_infus_data_retention', '3');
+            $logDays   = (int)getSetting('db_nurse_log_retention', '7');
+            
+            // Delete old data
+            $prune1 = $db->prepare("DELETE FROM infus_data WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
+            $prune1->execute([':days' => $infusDays]);
+            $deletedInfus = $prune1->rowCount();
+            
+            $prune2 = $db->prepare("DELETE FROM nurse_call_log WHERE status = 0 AND resolved_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
+            $prune2->execute([':days' => $logDays]);
+            $deletedNurse = $prune2->rowCount();
+            
+            // Rebuild/Optimize Tables
+            $db->query("OPTIMIZE TABLE infus_data");
+            $db->query("OPTIMIZE TABLE nurse_call_log");
+            
+            $message = "Database berhasil dioptimalkan! Terhapus: $deletedInfus data infus, $deletedNurse log panggilan.";
+        } catch (\Exception $e) {
+            $message = 'Gagal mengoptimalkan database: ' . $e->getMessage();
+            $msgType = 'danger';
+        }
+    }
 }
 
 $settings   = getAllSettings();
@@ -66,6 +118,35 @@ if (empty($apiKey) && !empty($settings['fonnte_token'] ?? '')) {
 }
 $msgNC      = $settings['wa_nurse_call_msg'] ?? '';
 $msgLV      = $settings['wa_low_volume_msg'] ?? '';
+$msgTPM     = $settings['wa_tpm_zero_msg']   ?? '';
+$msgTPMH    = $settings['wa_tpm_high_msg']   ?? '';
+$msgOK      = $settings['wa_resolved_msg']   ?? '';
+
+$infusRetention = (int)($settings['db_infus_data_retention'] ?? 3);
+$nurseRetention = (int)($settings['db_nurse_log_retention']  ?? 7);
+
+if (empty($settings['db_infus_data_retention'])) {
+    setSetting('db_infus_data_retention', '3');
+    $infusRetention = 3;
+}
+if (empty($settings['db_nurse_log_retention'])) {
+    setSetting('db_nurse_log_retention', '7');
+    $nurseRetention = 7;
+}
+
+// Insert default template jika belum ada di DB
+if (empty($msgTPM)) {
+    $msgTPM = 'INFUS MACET 🔴\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml\nWaktu: {waktu}\n\nTidak ada tetesan terdeteksi. Periksa selang atau jarum infus segera.';
+    setSetting('wa_tpm_zero_msg', $msgTPM);
+}
+if (empty($msgTPMH)) {
+    $msgTPMH = 'TPM TERLALU CEPAT ⚡\nPasien: {pasien}\nLokasi: {lokasi}\nTPM saat ini: {tpm} tetes/menit\nWaktu: {waktu}\n\nKecepatan tetesan infus terlalu cepat. Harap periksa dan sesuaikan pengaturan.';
+    setSetting('wa_tpm_high_msg', $msgTPMH);
+}
+if (empty($msgOK)) {
+    $msgOK = 'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.';
+    setSetting('wa_resolved_msg', $msgOK);
+}
 $activePage = 'settings';
 ?>
 <!DOCTYPE html>
@@ -112,6 +193,9 @@ $activePage = 'settings';
         <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
           <i class="bi bi-sliders"></i><span>Settings</span>
         </a>
+        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
+        </a>
       </div>
 
       <!-- Realtime Clock & Status Counter -->
@@ -137,13 +221,17 @@ $activePage = 'settings';
       <i class="bi bi-sliders text-lg"></i>
       <span>Settings</span>
     </a>
+    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-book-half text-lg"></i>
+      <span>Dokumentasi</span>
+    </a>
   </div>
 
   <!-- MAIN WORKSPACE CONTAINER -->
   <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
     <!-- SYSTEM ALERT NOTIFICATION -->
     <?php if ($message): ?>
-    <div class="p-4 rounded-xl flex items-center gap-3 border transition-all <?= $msgType === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800' ?>">
+    <div class="p-4 mb-4 rounded-xl flex items-center gap-3 border transition-all <?= $msgType === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800' ?>">
       <i class="bi bi-<?= $msgType === 'success' ? 'check2-circle' : 'exclamation-circle' ?> text-lg flex-shrink-0"></i>
       <span class="text-xs font-bold tracking-wide"><?= esc($message) ?></span>
     </div>
@@ -212,6 +300,37 @@ $activePage = 'settings';
               </div>
             </div>
 
+            <!-- SECTION HEADER: DATABASE RETENTION -->
+            <div class="pt-4 border-t border-slate-100 mt-2">
+              <h3 class="text-xs font-black text-slate-900 tracking-wider uppercase flex items-center gap-2 mb-3">
+                <i class="bi bi-database-fill text-[#6b2072]"></i> Manajemen Retensi Data Database
+              </h3>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Field: Infus Data Retention -->
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                  Retensi Data Infus (Hari)
+                </label>
+                <input type="number" name="db_infus_data_retention" min="1" max="180"
+                       value="<?= esc($infusRetention) ?>"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5" />
+                <span class="text-[9px] font-medium text-slate-400 mt-1 block">Rekomendasi: 3 hari (laju data cepat).</span>
+              </div>
+
+              <!-- Field: Nurse Call Log Retention -->
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                  Retensi Log Perawat (Hari)
+                </label>
+                <input type="number" name="db_nurse_log_retention" min="1" max="365"
+                       value="<?= esc($nurseRetention) ?>"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5" />
+                <span class="text-[9px] font-medium text-slate-400 mt-1 block">Rekomendasi: 7 hari (log panggilan selesai).</span>
+              </div>
+            </div>
+
             <!-- Field 2: Template Nurse Call -->
             <div>
               <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
@@ -232,7 +351,7 @@ $activePage = 'settings';
             <!-- Field 3: Template Low Volume -->
             <div>
               <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
-                <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> Template — Volume Kritis (&le; 10ml)
+                <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> Template — Volume Kritis (&le; 20%)
               </label>
               <textarea name="wa_low_volume_msg" rows="3"
                         class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl p-3.5 text-xs font-semibold font-mono text-slate-700 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 placeholder:text-slate-400"
@@ -243,6 +362,57 @@ $activePage = 'settings';
                 <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{lokasi}</code>
                 <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{volume}</code>
                 <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{persen}</code>
+              </div>
+            </div>
+
+            <!-- Field 4: Template TPM Macet -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <span class="w-1.5 h-1.5 bg-purple-600 rounded-full"></span> Template — Infus Macet (TPM = 0)
+              </label>
+              <textarea name="wa_tpm_zero_msg" rows="3"
+                        class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl p-3.5 text-xs font-semibold font-mono text-slate-700 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 placeholder:text-slate-400"
+                        placeholder="Contoh: Infus tidak menetes..."><?= esc($msgTPM) ?></textarea>
+              <div class="mt-1.5 flex flex-wrap gap-1 items-center">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{pasien}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{lokasi}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{volume}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{waktu}</code>
+              </div>
+            </div>
+
+            <!-- Field 5: Template TPM Terlalu Cepat -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <span class="w-1.5 h-1.5 bg-amber-500 rounded-full"></span> Template — TPM Terlalu Cepat (&gt; 80)
+              </label>
+              <textarea name="wa_tpm_high_msg" rows="3"
+                        class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl p-3.5 text-xs font-semibold font-mono text-slate-700 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 placeholder:text-slate-400"
+                        placeholder="Contoh: Tetesan infus terlalu cepat..."><?= esc($msgTPMH) ?></textarea>
+              <div class="mt-1.5 flex flex-wrap gap-1 items-center">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{pasien}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{lokasi}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{tpm}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{waktu}</code>
+              </div>
+            </div>
+
+            <!-- Field 6: Template Kondisi Normal (ke keluarga saja) -->
+            <div>
+              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Template — Kondisi Normal Kembali <span class="text-emerald-600">(ke keluarga saja)</span>
+              </label>
+              <textarea name="wa_resolved_msg" rows="3"
+                        class="w-full bg-slate-50 border border-slate-200 focus:border-[#6b2072] focus:bg-white rounded-xl p-3.5 text-xs font-semibold font-mono text-slate-700 outline-none transition-all focus:ring-4 focus:ring-[#6b2072]/5 placeholder:text-slate-400"
+                        placeholder="Contoh: Kondisi pasien sudah normal..."><?= esc($msgOK) ?></textarea>
+              <div class="mt-1.5 flex flex-wrap gap-1 items-center">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{pasien}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{lokasi}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{waktu}</code>
+                <code class="text-[9px] font-bold bg-slate-100 text-[#6b2072] border border-slate-200 px-1.5 py-0.5 rounded font-mono">{resolved_label}</code>
               </div>
             </div>
 
@@ -335,6 +505,35 @@ $activePage = 'settings';
               </ul>
             </div>
           </div>
+        </div>
+
+        <!-- DATABASE MAINTENANCE CARD -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-4.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+            <div class="w-9 h-9 bg-purple-50 text-[#6b2072] rounded-xl flex items-center justify-center border border-purple-100">
+              <i class="bi bi-database-fill-gear text-base"></i>
+            </div>
+            <div>
+              <h2 class="text-xs font-black text-slate-900 tracking-wider uppercase">Pemeliharaan Database</h2>
+              <p class="text-[10px] font-bold text-slate-400 tracking-wide uppercase">Reklamasi & Optimasi Ruang Disk</p>
+            </div>
+          </div>
+
+          <form method="POST" action="settings.php" class="p-5 flex flex-col gap-3.5">
+            <input type="hidden" name="action" value="optimize_db" />
+            
+            <p class="text-xs text-slate-600 leading-relaxed">
+              Tekan tombol di bawah untuk membersihkan data lama secara manual berdasarkan konfigurasi retensi hari dan merapikan indeks fisik MySQL (<span class="font-mono">OPTIMIZE TABLE</span>).
+            </p>
+            
+            <button type="submit" class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#6b2072] hover:bg-[#541859] text-white rounded-xl text-xs font-bold tracking-wide active:scale-95 transition-all cursor-pointer shadow-md shadow-[#6b2072]/10">
+              <i class="bi bi-tools"></i> OPTIMALKAN DATABASE SEKARANG
+            </button>
+            
+            <span class="text-[9px] font-medium text-slate-400 leading-relaxed block">
+              <i class="bi bi-info-circle text-[#6b2072]"></i> Proses ini akan mengunci tabel selama beberapa saat untuk merekonstruksi indeks database.
+            </span>
+          </form>
         </div>
 
       </div>

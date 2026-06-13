@@ -1,7 +1,19 @@
 # Smart Infus — Apache Config
 Options -Indexes
 
-# Gzip compression
+# ── SSE: matikan gzip & buffering untuk endpoint sse.php ──
+<Files "sse.php">
+  SetEnv no-gzip 1
+  SetEnv dont-vary 1
+  Header set Cache-Control "no-cache, no-store"
+  Header set X-Accel-Buffering "no"
+  # Timeout 6 menit (PHP set_time_limit 300 + buffer)
+  <IfModule mod_reqtimeout.c>
+    RequestReadTimeout header=0 body=0
+  </IfModule>
+</Files>
+
+# Gzip compression (skip SSE)
 <IfModule mod_deflate.c>
   AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json
 </IfModule>

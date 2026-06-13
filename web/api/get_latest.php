@@ -48,6 +48,14 @@ if ($device_id) {
     $stmt->execute([':device_id' => $device_id]);
     $result = $stmt->fetch();
 
+    if ($result) {
+        $isOnline = false;
+        if (!empty($result['created_at'])) {
+            $isOnline = (time() - strtotime($result['created_at'])) < 30;
+        }
+        $result['is_online'] = $isOnline;
+    }
+
     echo json_encode([
         'status' => 'ok',
         'data'   => $result ?: null,
@@ -85,6 +93,15 @@ if ($device_id) {
     ");
 
     $rows = $stmt->fetchAll();
+
+    foreach ($rows as &$row) {
+        $isOnline = false;
+        if (!empty($row['created_at'])) {
+            $isOnline = (time() - strtotime($row['created_at'])) < 30;
+        }
+        $row['is_online'] = $isOnline;
+    }
+    unset($row);
 
     echo json_encode([
         'status' => 'ok',

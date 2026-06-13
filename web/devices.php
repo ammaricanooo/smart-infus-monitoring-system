@@ -141,6 +141,9 @@ $activePage = 'devices';
         <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
           <i class="bi bi-sliders"></i><span>Settings</span>
         </a>
+        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
+        </a>
       </div>
 
       <!-- Realtime Clock Placeholder -->
@@ -165,6 +168,10 @@ $activePage = 'devices';
     <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
       <i class="bi bi-sliders text-lg"></i>
       <span>Settings</span>
+    </a>
+    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-book-half text-lg"></i>
+      <span>Dokumentasi</span>
     </a>
   </div>
 
@@ -312,7 +319,7 @@ $activePage = 'devices';
                 $isOnline = false;
                 if ($dev['last_update']) {
                     $last = strtotime($dev['last_update']);
-                    if ((time() - $last) < 30) {
+                    if ((time() - $last) < 15) {
                         $isOnline = true;
                     }
                 }

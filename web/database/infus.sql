@@ -43,7 +43,10 @@ INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
   ('wa_api_key',          ''),
   ('fonnte_token',        ''),
   ('wa_nurse_call_msg',   'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
-  ('wa_low_volume_msg',   'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.');
+  ('wa_low_volume_msg',   'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.'),
+  ('wa_tpm_zero_msg',     'INFUS MACET 🔴\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml\nWaktu: {waktu}\n\nTidak ada tetesan terdeteksi. Periksa selang atau jarum infus segera.'),
+  ('wa_tpm_high_msg',     'TPM TERLALU CEPAT ⚡\nPasien: {pasien}\nLokasi: {lokasi}\nTPM saat ini: {tpm} tetes/menit\nWaktu: {waktu}\n\nKecepatan tetesan infus terlalu cepat. Harap periksa dan sesuaikan pengaturan.'),
+  ('wa_resolved_msg',     'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.');
 
 -- =====================================================
 -- TABLE: infus_data (data realtime dari ESP32)

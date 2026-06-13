@@ -11,18 +11,18 @@
 #include <ArduinoJson.h>
 
 // ================= WIFI =================
-#define WIFI_SSID        "Redmi Note 14"
-#define WIFI_PASSWORD    "aaaaaaab"
+#define WIFI_SSID "Redmi Note 14"
+#define WIFI_PASSWORD "aaaaaaab"
 
 // ================= SERVER =================
 // Ganti dengan IP server Laragon kamu
-#define SERVER_URL       "http://10.200.50.130/infus_2/web/api/post_data.php"
-#define DEVICE_ID        "INFUS-01"
+#define SERVER_URL "http://10.83.179.130/infus_2/web/api/post_data.php"
+#define DEVICE_ID "INFUS-01"
 
 // ================= HX711 =================
-#define DOUT_PIN         5
-#define SCK_PIN          4
-#define BERAT_KANTONG    25.0
+#define DOUT_PIN 5
+#define SCK_PIN 4
+#define BERAT_KANTONG 25.0
 
 HX711 scale;
 
@@ -31,32 +31,34 @@ HX711 scale;
 //   Mode 100ml → terbaca 333.97 g,  seharusnya 150 g  → 420 × (333.97/150)  =  935.1
 // Karena satu sensor dipakai untuk semua mode, gunakan nilai per-mode
 // agar akurasi optimal di masing-masing rentang berat.
-#define CAL_500ML   1060.8f   // calibration factor untuk kantong 500 ml
-#define CAL_100ML    935.1f   // calibration factor untuk kantong 100 ml
-#define CAL_OTHER    998.0f   // rata-rata keduanya untuk mode OTHER/unknown
+#define CAL_500ML 1060.8f  // calibration factor untuk kantong 500 ml
+#define CAL_100ML 935.1f   // calibration factor untuk kantong 100 ml
+#define CAL_OTHER 998.0f   // rata-rata keduanya untuk mode OTHER/unknown
 
 float calibrationFactor = CAL_500ML;  // default mode 500ml
 
 // ================= OLED ==================
-#define SCREEN_WIDTH     128
-#define SCREEN_HEIGHT    64
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 
 Adafruit_SSD1306 display(
   SCREEN_WIDTH,
   SCREEN_HEIGHT,
   &Wire,
-  -1
-);
+  -1);
+
+// ================= BATTERY =================
+#define BATTERY_PIN 34
 
 // ================= IR ====================
-#define IR_SENSOR_PIN    23
-#define LED_PIN          2
+#define IR_SENSOR_PIN 23
+#define LED_PIN 2
 
-#define DROPS_PER_ML     20.0
+#define DROPS_PER_ML 20.0
 
 // ================= BUTTON =================
-#define BUTTON_PIN       15
-#define BUZZER           18
+#define BUTTON_PIN 15
+#define BUZZER 18
 #define NURSE_BUTTON_PIN 19
 
 // mode volume
@@ -124,15 +126,15 @@ void updateVolumeMode() {
   // mode 500 ml
   if (volumeMode == 0) {
 
-    currentVolumeAwal  = 500.0;
-    calibrationFactor  = CAL_500ML;
+    currentVolumeAwal = 500.0;
+    calibrationFactor = CAL_500ML;
   }
 
   // mode 100 ml
   else if (volumeMode == 1) {
 
-    currentVolumeAwal  = 100.0;
-    calibrationFactor  = CAL_100ML;
+    currentVolumeAwal = 100.0;
+    calibrationFactor = CAL_100ML;
   }
 
   // mode OTHER — ambil berat loadcell saat ini sebagai acuan
@@ -140,10 +142,9 @@ void updateVolumeMode() {
   // taskLoadCell akan update saat berat masuk
   else {
 
-    calibrationFactor  = CAL_OTHER;
-    currentVolumeAwal  =
-      volumeSisaBerat > 0 ?
-      volumeSisaBerat : 0.0;
+    calibrationFactor = CAL_OTHER;
+    currentVolumeAwal =
+      volumeSisaBerat > 0 ? volumeSisaBerat : 0.0;
   }
 
   // terapkan calibration factor baru ke sensor
@@ -161,9 +162,7 @@ void taskButton(void *pvParameters) {
     bool reading = digitalRead(BUTTON_PIN);
 
     // tombol ditekan
-    if (reading == LOW &&
-        lastButtonState == HIGH &&
-        millis() - lastButtonPress > 250) {
+    if (reading == LOW && lastButtonState == HIGH && millis() - lastButtonPress > 250) {
 
       lastButtonPress = millis();
 
@@ -197,12 +196,10 @@ void taskNurseCall(void *pvParameters) {
     bool reading = digitalRead(NURSE_BUTTON_PIN);
 
     // toggle saat ditekan
-    if (reading == LOW &&
-        lastNurseState == HIGH &&
-        millis() - lastNursePress > 250) {
-          digitalWrite(BUZZER, HIGH);
-          delay(100);
-          digitalWrite(BUZZER, LOW);
+    if (reading == LOW && lastNurseState == HIGH && millis() - lastNursePress > 250) {
+      digitalWrite(BUZZER, HIGH);
+      delay(100);
+      digitalWrite(BUZZER, LOW);
 
       lastNursePress = millis();
 
@@ -219,8 +216,7 @@ void taskNurseCall(void *pvParameters) {
 
       digitalWrite(BUZZER, LOW);
       vTaskDelay(pdMS_TO_TICKS(150));
-    }
-    else {
+    } else {
 
       vTaskDelay(pdMS_TO_TICKS(30));
     }
@@ -259,8 +255,7 @@ void taskLoadCell(void *pvParameters) {
     // batas maksimum untuk mode 500ml dan 100ml
     if (volumeMode != 2) {
 
-      if (volumeSisaBerat >
-          currentVolumeAwal) {
+      if (volumeSisaBerat > currentVolumeAwal) {
 
         volumeSisaBerat =
           currentVolumeAwal;
@@ -271,8 +266,7 @@ void taskLoadCell(void *pvParameters) {
     if (currentVolumeAwal > 0) {
 
       persen =
-        (volumeSisaBerat /
-         currentVolumeAwal) * 100.0;
+        (volumeSisaBerat / currentVolumeAwal) * 100.0;
     }
 
     if (persen > 100)
@@ -301,11 +295,7 @@ void taskTPM(void *pvParameters) {
     float ml_used =
       totalDrops / DROPS_PER_ML;
 
-    float ml_remaining =
-      currentVolumeAwal - ml_used;
-
-    if (ml_remaining < 0)
-      ml_remaining = 0;
+    float ml_remaining = volumeSisaBerat;
 
     float ml_per_min =
       tpm / DROPS_PER_ML;
@@ -327,6 +317,38 @@ void taskTPM(void *pvParameters) {
 }
 
 // =====================================================
+// ================= BATTERY HELPER ====================
+// =====================================================
+
+float getBatteryPercent() {
+  static float filteredPercent = -1.0;
+
+  int raw = analogRead(BATTERY_PIN);
+  // Convert 12-bit raw ADC (0-4095) to voltage assuming 3.3V reference
+  // and a typical 2x voltage divider (R1=100k, R2=100k)
+  float voltage = (raw / 4095.0) * 3.3 * 2.0;
+
+  // If raw ADC is very low, it's likely running on USB power without a battery connected.
+  // We return 100% in this case so it displays a full battery.
+  if (raw < 500) {
+    return 100.0;
+  }
+
+  // Standard Li-ion battery voltage range: 3.2V (empty) to 4.2V (full)
+  float percent = (voltage - 3.2) / (4.2 - 3.2) * 100.0;
+  if (percent > 100.0) percent = 100.0;
+  if (percent < 0.0) percent = 0.0;
+
+  if (filteredPercent < 0) {
+    filteredPercent = percent;  // Initialize
+  } else {
+    // Low pass filter (EMA) to smooth out fluctuations
+    filteredPercent = filteredPercent * 0.95 + percent * 0.05;
+  }
+  return filteredPercent;
+}
+
+// =====================================================
 // ================= TASK OLED ==========================
 // =====================================================
 
@@ -338,13 +360,11 @@ void taskOLED(void *pvParameters) {
 
     // ===== FRAME =====
     display.drawRoundRect(
-      0, 0, 128, 64, 5, WHITE
-    );
+      0, 0, 128, 64, 5, WHITE);
 
     // ===== HEADER =====
     display.fillRoundRect(
-      0, 0, 128, 12, 5, WHITE
-    );
+      0, 0, 128, 12, 5, WHITE);
 
     display.setTextColor(BLACK);
     display.setTextSize(1);
@@ -352,33 +372,43 @@ void taskOLED(void *pvParameters) {
     display.setCursor(28, 2);
     display.println("SMART INFUS");
 
+    // ===== BATTERY ICON IN HEADER =====
+    // Battery outline rectangle
+    display.drawRect(4, 2, 14, 8, BLACK);
+    display.fillRect(18, 4, 2, 4, BLACK);
+
+    float batPercent = getBatteryPercent();
+    int batWidth = map((int)batPercent, 0, 100, 0, 10);
+
+    if (batWidth > 0) {
+      display.fillRect(6, 4, batWidth, 4, BLACK);
+    }
+
     display.setTextColor(WHITE);
 
     // ===== MODE =====
-    display.setCursor(5, 14);
+    display.setCursor(8, 14);
 
     display.print("MODE:");
 
     if (volumeMode == 0) {
 
       display.print("500ml");
-    }
-    else if (volumeMode == 1) {
+    } else if (volumeMode == 1) {
 
       display.print("100ml");
-    }
-    else {
+    } else {
 
       display.print("OTHER");
     }
 
     // ===== WIFI STATUS =====
-    display.setCursor(90, 14);
+    display.setCursor(88, 14);
 
     if (wifiConnected) {
-      display.print("WiFi OK");
+      display.print("WiFi");
     } else {
-      display.print("No WiFi");
+      display.print("Off");
     }
 
     // ===== NURSE CALL =====
@@ -387,8 +417,7 @@ void taskOLED(void *pvParameters) {
       if ((millis() / 250) % 2) {
 
         display.fillRoundRect(
-          88, 14, 35, 10, 2, WHITE
-        );
+          88, 14, 35, 10, 2, WHITE);
 
         display.setTextColor(BLACK);
 
@@ -400,27 +429,21 @@ void taskOLED(void *pvParameters) {
     }
 
     // ===== ICON INFUS =====
-    display.drawLine(120, 14, 120, 28, WHITE);
+    display.drawLine(120, 14, 120, 20, WHITE);  // Needle/tip
 
-    int dropY =
-      (millis() / 300) % 2 ? 25 : 30;
-
-    display.fillCircle(
-      120,
-      dropY,
-      2,
-      WHITE
-    );
-
-    display.fillTriangle(
-      118, dropY,
-      122, dropY,
-      120, dropY + 4,
-      WHITE
-    );
+    unsigned long timeSinceLastDrop = millis() - lastTriggerTime;
+    if (timeSinceLastDrop < 500) {
+      // Smooth falling drop animation (falls 12 pixels from y=20 to y=32 in 500ms)
+      int dropY = 20 + (timeSinceLastDrop * 12 / 500);
+      display.fillCircle(120, dropY, 1, WHITE);
+      display.fillTriangle(119, dropY, 121, dropY, 120, dropY - 2, WHITE);
+    } else {
+      // Static drop forming at the needle tip
+      display.fillCircle(120, 20, 1, WHITE);
+    }
 
     // ===== VOLUME =====
-    display.setCursor(5, 24);
+    display.setCursor(8, 24);
 
     display.print("SISA:");
 
@@ -432,8 +455,7 @@ void taskOLED(void *pvParameters) {
 
       display.print("AUTO");
       display.print((int)currentVolumeAwal);
-    }
-    else {
+    } else {
 
       display.print((int)currentVolumeAwal);
       display.print("ml");
@@ -441,18 +463,16 @@ void taskOLED(void *pvParameters) {
 
     // ===== PROGRESS =====
     display.drawRoundRect(
-      5, 36, 118, 10, 3, WHITE
-    );
+      8, 36, 112, 10, 3, WHITE);
 
     int bar =
-      map((int)persen, 0, 100, 0, 114);
+      map((int)persen, 0, 100, 0, 108);
 
     display.fillRoundRect(
-      7, 38, bar, 6, 2, WHITE
-    );
+      10, 38, bar, 6, 2, WHITE);
 
     // ===== TPM =====
-    display.setCursor(5, 50);
+    display.setCursor(8, 50);
 
     display.print("TPM:");
     display.print(tpm, 0);
@@ -472,8 +492,7 @@ void taskOLED(void *pvParameters) {
       if ((millis() / 300) % 2) {
 
         display.fillRoundRect(
-          95, 2, 30, 8, 2, BLACK
-        );
+          95, 2, 30, 8, 2, BLACK);
 
         display.setCursor(100, 2);
         display.setTextColor(WHITE);
@@ -563,8 +582,7 @@ void taskWiFi(void *pvParameters) {
     Serial.println("\nWiFi Terhubung!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
-  }
-  else {
+  } else {
 
     wifiConnected = false;
     Serial.println("\nGagal terhubung WiFi!");
@@ -581,8 +599,7 @@ void taskWiFi(void *pvParameters) {
       WiFi.reconnect();
 
       vTaskDelay(pdMS_TO_TICKS(5000));
-    }
-    else {
+    } else {
 
       wifiConnected = true;
     }
@@ -612,15 +629,15 @@ void taskHTTPPost(void *pvParameters) {
       // buat JSON payload
       StaticJsonDocument<256> doc;
 
-      doc["device_id"]    = DEVICE_ID;
-      doc["tpm"]          = (int)tpm;
-      doc["volume_sisa"]  = (int)volumeSisaBerat;
-      doc["volume_awal"]  = (int)currentVolumeAwal;
-      doc["persen"]       = (int)persen;
+      doc["device_id"] = DEVICE_ID;
+      doc["tpm"] = (int)tpm;
+      doc["volume_sisa"] = (int)volumeSisaBerat;
+      doc["volume_awal"] = (int)currentVolumeAwal;
+      doc["persen"] = (int)persen;
       doc["estimasi_jam"] = hours;
       doc["estimasi_mnt"] = minutes;
-      doc["total_tetes"]  = (int)totalDrops;
-      doc["nurse_call"]   = nurseCallActive ? 1 : 0;
+      doc["total_tetes"] = (int)totalDrops;
+      doc["nurse_call"] = nurseCallActive ? 1 : 0;
 
       // mode string
       if (volumeMode == 0)
@@ -643,16 +660,14 @@ void taskHTTPPost(void *pvParameters) {
         String response = http.getString();
         Serial.print("Response: ");
         Serial.println(response);
-      }
-      else {
+      } else {
 
         Serial.print("HTTP Error: ");
         Serial.println(httpCode);
       }
 
       http.end();
-    }
-    else {
+    } else {
 
       Serial.println("Skip HTTP: WiFi tidak terhubung");
     }
@@ -681,11 +696,12 @@ void setup() {
   // ===== OLED =====
   if (!display.begin(
         SSD1306_SWITCHCAPVCC,
-        0x3C
-      )) {
+        0x3C)) {
 
-    while (1);
+    while (1)
+      ;
   }
+  display.setTextWrap(false); // Nonaktifkan text wrap agar teks overflow tidak membungkus ke baris baru
 
   // ===== IR =====
   pinMode(IR_SENSOR_PIN, INPUT_PULLUP);
@@ -701,11 +717,13 @@ void setup() {
   // ===== NURSE BUTTON =====
   pinMode(NURSE_BUTTON_PIN, INPUT_PULLUP);
 
+  // ===== BATTERY INPUT =====
+  pinMode(BATTERY_PIN, INPUT);
+
   attachInterrupt(
     digitalPinToInterrupt(IR_SENSOR_PIN),
     onDropDetected,
-    FALLING
-  );
+    FALLING);
 
   // set default mode
   updateVolumeMode();
@@ -721,8 +739,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    1
-  );
+    1);
 
   xTaskCreatePinnedToCore(
     taskTPM,
@@ -731,8 +748,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    1
-  );
+    1);
 
   xTaskCreatePinnedToCore(
     taskOLED,
@@ -741,8 +757,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
 
   xTaskCreatePinnedToCore(
     taskSerial,
@@ -751,8 +766,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
 
   xTaskCreatePinnedToCore(
     taskButton,
@@ -761,8 +775,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
 
   xTaskCreatePinnedToCore(
     taskNurseCall,
@@ -771,8 +784,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
 
   xTaskCreatePinnedToCore(
     taskWiFi,
@@ -781,8 +793,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
 
   xTaskCreatePinnedToCore(
     taskHTTPPost,
@@ -791,8 +802,7 @@ void setup() {
     NULL,
     1,
     NULL,
-    0
-  );
+    0);
 }
 
 // =====================================================

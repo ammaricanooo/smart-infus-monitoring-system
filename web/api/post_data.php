@@ -132,9 +132,24 @@ if ($nurse_call === 1) {
     $resolveStmt->execute([':device_id' => $device_id]);
 }
 
-// ── Kirim notifikasi WhatsApp volume kritis (≤ 10 ml, sekali per sesi) ──
-// Gunakan tabel settings sebagai flag agar tidak spam
-if ($volume_sisa > 0 && $volume_sisa <= 10) {
+// ── TPM tinggi (> 80 tpm) — WA sekali per sesi ──────────────────────────
+if ($tpm > 80 && $volume_sisa > 0) {
+    $flagKey = 'tpm_high_alerted_' . $device_id;
+    if (getSetting($flagKey, '0') !== '1') {
+        setSetting($flagKey, '1');
+        triggerWhatsApp($db, $device_id, 'tpm_high', $volume_sisa, $persen, $tpm);
+    }
+} else {
+    // Reset flag ketika TPM kembali normal
+    $flagKey = 'tpm_high_alerted_' . $device_id;
+    if (getSetting($flagKey, '0') === '1') {
+        setSetting($flagKey, '0');
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_high');
+    }
+}
+
+// ── Kirim notifikasi WhatsApp volume kritis (≤ 20 ml, sekali per sesi) ──
+if ($volume_sisa > 0 && $volume_sisa <= 20) {
     $flagKey  = 'low_vol_alerted_' . $device_id;
     $alerted  = getSetting($flagKey, '0');
     if ($alerted !== '1') {
@@ -142,53 +157,97 @@ if ($volume_sisa > 0 && $volume_sisa <= 10) {
         triggerWhatsApp($db, $device_id, 'low_volume', $volume_sisa, $persen);
     }
 } else {
-    // Reset flag jika volume sudah normal kembali
     $flagKey = 'low_vol_alerted_' . $device_id;
     if (getSetting($flagKey, '0') === '1') {
         setSetting($flagKey, '0');
+        // Volume kembali normal (infus diganti) — beri tahu keluarga saja
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, 0, 'low_volume');
     }
 }
 
-// ── Helper: trigger WhatsApp non-blocking ────────────────────────────────
-function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume, float $persen): void {
-    // Ambil data device untuk cek apakah ada nomor terdaftar
+// ── Kirim notifikasi WhatsApp infus macet (TPM = 0, ada sisa volume, sekali per sesi) ──
+if ($tpm == 0 && $volume_sisa > 0) {
+    $flagKey   = 'tpm_zero_since_' . $device_id;
+    $sinceSecs = (int) getSetting($flagKey, '0');
+    if ($sinceSecs === 0) {
+        setSetting($flagKey, (string) time());
+    } else {
+        $elapsed    = time() - $sinceSecs;
+        $alertedKey = 'tpm_zero_alerted_' . $device_id;
+        if ($elapsed >= 15 && getSetting($alertedKey, '0') !== '1') {
+            setSetting($alertedKey, '1');
+            triggerWhatsApp($db, $device_id, 'tpm_zero', $volume_sisa, $persen);
+        }
+    }
+} else {
+    $flagKey    = 'tpm_zero_since_'   . $device_id;
+    $alertedKey = 'tpm_zero_alerted_' . $device_id;
+    $wasAlerted = getSetting($alertedKey, '0') === '1';
+    if (getSetting($flagKey, '0') !== '0') setSetting($flagKey, '0');
+    if ($wasAlerted) {
+        setSetting($alertedKey, '0');
+        // TPM kembali normal — beri tahu keluarga saja
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_zero');
+    }
+}
+
+// ── Helper: trigger WhatsApp ─────────────────────────────────────────────
+// $resolvedType: 'low_volume' | 'tpm_zero' | 'tpm_high' — untuk template resolved
+function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume, float $persen, float $tpm = 0, string $resolvedType = ''): void {
     $s = $db->prepare("SELECT no_suster, no_keluarga FROM devices WHERE device_id = :id");
     $s->execute([':id' => $device_id]);
     $dev = $s->fetch();
-
     if (!$dev) return;
 
-    $hasTarget = !empty(trim($dev['no_suster'] ?? '')) || !empty(trim($dev['no_keluarga'] ?? ''));
-    if (!$hasTarget) return;
+    $noSuster   = trim($dev['no_suster']   ?? '');
+    $noKeluarga = trim($dev['no_keluarga'] ?? '');
 
-    // Ambil template & render langsung (tanpa HTTP call ke diri sendiri)
-    $templateKey = ($type === 'nurse_call') ? 'wa_nurse_call_msg' : 'wa_low_volume_msg';
-    $template    = getSetting($templateKey, '');
+    // Notif 'resolved' hanya ke keluarga
+    $isResolved = ($type === 'resolved');
+    if ($isResolved) {
+        if (empty($noKeluarga)) return;
+        $targets = [$noKeluarga];
+    } else {
+        $targets = array_filter([$noSuster, $noKeluarga]);
+        if (empty($targets)) return;
+    }
+
+    $templateKey = match($type) {
+        'nurse_call'  => 'wa_nurse_call_msg',
+        'low_volume'  => 'wa_low_volume_msg',
+        'tpm_zero'    => 'wa_tpm_zero_msg',
+        'tpm_high'    => 'wa_tpm_high_msg',
+        'resolved'    => 'wa_resolved_msg',
+        default       => 'wa_low_volume_msg',
+    };
+    $template = getSetting($templateKey, '');
     if (empty($template)) return;
 
-    // Ambil info lengkap device
     $full = $db->prepare("SELECT * FROM devices WHERE device_id = :id");
     $full->execute([':id' => $device_id]);
     $device = $full->fetch();
     if (!$device) return;
 
+    // Keterangan masalah yang sudah teratasi
+    $resolvedLabel = match($resolvedType) {
+        'low_volume' => 'volume infus kembali normal (infus telah diganti)',
+        'tpm_zero'   => 'infus kembali menetes normal',
+        'tpm_high'   => 'kecepatan tetesan kembali normal',
+        default      => 'kondisi kembali normal',
+    };
+
     $message = renderWaMessage($template, [
-        'pasien'  => $device['pasien']  ?: '-',
-        'lokasi'  => $device['lokasi']  ?: '-',
-        'volume'  => round($volume),
-        'persen'  => round($persen),
-        'waktu'   => date('d/m/Y H:i:s'),
-        'device'  => $device_id,
+        'pasien'         => $device['pasien']  ?: '-',
+        'lokasi'         => $device['lokasi']  ?: '-',
+        'volume'         => round($volume),
+        'persen'         => round($persen),
+        'tpm'            => round($tpm),
+        'waktu'          => date('d/m/Y H:i:s'),
+        'device'         => $device_id,
+        'resolved_label' => $resolvedLabel,
     ]);
 
-    $targets = array_filter([
-        trim($device['no_suster']   ?? ''),
-        trim($device['no_keluarga'] ?? ''),
-    ]);
-
-    if (!empty($targets)) {
-        sendWhatsApp(array_values($targets), $message);
-    }
+    sendWhatsApp(array_values($targets), $message);
 }
 
 // auto-register device jika belum ada, atau aktifkan kembali jika pernah dinonaktifkan
@@ -214,6 +273,26 @@ if (!$existingDev) {
         UPDATE devices SET aktif = 1 WHERE device_id = :device_id
     ");
     $devReactivate->execute([':device_id' => $device_id]);
+}
+
+// ── Pembersihan Data Otomatis Probabilistik (Peluang 1% Per Post) ──
+if (mt_rand(1, 100) === 1) {
+    try {
+        $infusDays = (int)getSetting('db_infus_data_retention', '3');
+        $logDays   = (int)getSetting('db_nurse_log_retention', '7');
+        
+        if ($infusDays > 0) {
+            $pruneInfus = $db->prepare("DELETE FROM infus_data WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
+            $pruneInfus->execute([':days' => $infusDays]);
+        }
+        
+        if ($logDays > 0) {
+            $pruneNurse = $db->prepare("DELETE FROM nurse_call_log WHERE status = 0 AND resolved_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
+            $pruneNurse->execute([':days' => $logDays]);
+        }
+    } catch (\Throwable $e) {
+        error_log("Database auto-pruning failed: " . $e->getMessage());
+    }
 }
 
 echo json_encode([

@@ -31,9 +31,16 @@ $lowVolumeCount = 0;
 $onlineCount    = 0;
 
 foreach ($devices as $dev) {
-    if ($dev['nurse_call'])                                                 $nurseCallCount++;
-    if ($dev['persen'] !== null && $dev['persen'] <= 20)                     $lowVolumeCount++;
-    if ($dev['last_update'] && strtotime($dev['last_update']) >= time() - 30) $onlineCount++;
+  $isDevOnline = $dev['last_update'] && (strtotime($dev['last_update']) >= time() - 30);
+  if ($dev['nurse_call'] && $isDevOnline)                      $nurseCallCount++;
+  if (
+    $isDevOnline &&
+    $dev['persen'] !== null &&
+    $dev['persen'] <= 20
+  ) {
+    $lowVolumeCount++;
+  }
+  if ($isDevOnline)                                            $onlineCount++;
 }
 
 $logStmt = $db->query("
@@ -48,26 +55,265 @@ $activePage = 'dashboard';
 ?>
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Infus — Central Monitoring System</title>
-  
+
   <!-- Local Tailwind CSS -->
   <link rel="stylesheet" href="assets/css/style.css" />
-  
+
   <!-- Typography & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 </head>
+
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0">
+
+  <div id="audio-blocked-modal" class="hidden fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 select-none animate-fade-in">
+    <div class="bg-white p-6 rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200">
+
+      <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
+        <div class="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center flex-shrink-0 border border-red-100">
+          <i class="bi bi-volume-mute-fill text-xl"></i>
+        </div>
+        <div>
+          <h3 class="text-sm font-black text-slate-900 tracking-wide uppercase">Autoplay Audio Diblokir Browser</h3>
+          <p class="text-[11px] font-bold text-red-500">Peringatan: Suara Alarm Nurse Call tidak akan berbunyi!</p>
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-600 space-y-3 leading-relaxed mb-6">
+        <p>Untuk memastikan keselamatan pasien di bangsal perawatan, ikuti panduan bypass proteksi audio Chrome di komputer <i>Nurse Station</i> ini:</p>
+
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 space-y-2">
+          <div class="flex gap-2">
+            <span class="flex-shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">1</span>
+            <span>Buka tab baru di Chrome, lalu ketik/salin tautan ini di address bar:
+              <button
+                type="button"
+                onclick="copyChromeSettings(this)"
+                class="inline-flex items-center gap-2 mt-1 font-mono font-bold hover:bg-slate-50 transition">
+                <span class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1 font-mono font-bold hover:bg-slate-50 transition">chrome://settings/content/sound</span>
+                <span class="copy-status text-xs hidden text-gray-500">
+                  Copied
+                </span>
+              </button>
+            </span>
+          </div>
+          <div class="flex gap-2">
+            <span class="flex-shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">2</span>
+            <span>Scroll ke bawah ke menu <b class="text-slate-900">"Allowed to play sound"</b> (Diizinkan memutar suara) lalu klik <b class="text-slate-900">Add</b>.</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="flex-shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">3</span>
+            <span class="flex flex-col">
+              <span>Masukkan domain/URL dashboard ini:</span>
+              <button
+                type="button"
+                onclick="copyUrlSettings(this)"
+                class="inline-flex items-center gap-2 mt-1 font-mono font-bold hover:bg-slate-50 transition">
+                <span class="flex items-center gap-2 bg-white border border-slate-200 rounded px-2 py-1 font-mono font-bold hover:bg-slate-50 transition"><?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]" ?></span>
+                <span class="copy-status text-xs hidden text-gray-500">
+                  Copied
+                </span>
+              </button>
+            </span>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400 italic">Setelah pengaturan di atas ditambahkan, muat ulang (refresh) halaman ini. Modal ini akan hilang secara otomatis.</p>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="window.location.reload()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200">
+          <i class="bi bi-arrow-clockwise mr-1"></i> CEK ULANG (REFRESH)
+        </button>
+        <button id="audio-allow-temp" onclick="document.getElementById('audio-blocked-modal').classList.add('hidden')" class="flex-1 py-2 bg-[#6b2072] hover:bg-[#55195b] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#6b2072]/20">
+          IZINKAN SEMENTARA
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Hidden alarm audio used for autoplay detection and manual triggering -->
+  <audio
+    id="alarm-sound"
+    src="assets/nurse-call.mp3"
+    preload="auto"
+    playsinline>
+  </audio>
+  <script>
+    function copyChromeSettings(btn) {
+      navigator.clipboard.writeText(
+        'chrome://settings/content/sound'
+      );
+
+      const status = btn.querySelector('.copy-status');
+      status.classList.remove('hidden');
+
+      setTimeout(() => {
+        status.classList.add('hidden');
+      }, 2000);
+    }
+
+    function copyUrlSettings(btn) {
+      navigator.clipboard.writeText(
+        '<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://$_SERVER[HTTP_HOST]" ?>'
+      );
+
+      const status = btn.querySelector('.copy-status');
+      status.classList.remove('hidden');
+
+      setTimeout(() => {
+        status.classList.add('hidden');
+      }, 2000);
+    }
+
+    const alarmSound =
+      document.getElementById('alarm-sound');
+
+    const audioModal =
+      document.getElementById('audio-blocked-modal');
+
+    async function checkAutoplayPermission() {
+
+      if (!alarmSound || !audioModal) return;
+
+      try {
+
+        await new Promise((resolve) => {
+
+          if (alarmSound.readyState >= 3) {
+            resolve();
+          } else {
+
+            alarmSound.addEventListener(
+              'canplaythrough',
+              resolve, {
+                once: true
+              }
+            );
+          }
+
+        });
+
+        alarmSound.muted = true;
+
+        await alarmSound.play();
+
+        alarmSound.pause();
+        alarmSound.currentTime = 0;
+        alarmSound.muted = false;
+
+        audioModal.classList.add('hidden');
+
+        console.log('Autoplay diizinkan');
+
+      } catch (err) {
+
+        console.error(err);
+
+        audioModal.classList.remove('hidden');
+
+        console.log('Autoplay diblokir');
+      }
+    }
+
+    function unlockAudio() {
+
+      const Ctx =
+        window.AudioContext ||
+        window.webkitAudioContext;
+
+      if (Ctx) {
+
+        try {
+
+          if (!window.__audioCtx) {
+            window.__audioCtx = new Ctx();
+          }
+
+          if (
+            window.__audioCtx.state === 'suspended'
+          ) {
+            window.__audioCtx.resume();
+          }
+
+        } catch (e) {}
+      }
+    }
+
+    window.addEventListener('load', () => {
+
+      setTimeout(() => {
+        checkAutoplayPermission();
+      }, 300);
+
+    });
+
+    window.addEventListener('load', () => {
+
+      checkAutoplayPermission();
+
+      const allowBtn =
+        document.getElementById(
+          'audio-allow-temp'
+        );
+
+      if (allowBtn) {
+
+        allowBtn.addEventListener('click', async () => {
+
+          unlockAudio();
+
+          try {
+
+            await alarmSound.play();
+
+            alarmSound.pause();
+            alarmSound.currentTime = 0;
+
+          } catch (e) {}
+
+          audioModal.classList.add('hidden');
+        });
+      }
+    });
+
+    function triggerEmergencyAlarm(shouldPlay) {
+
+      if (!alarmSound) return;
+
+      unlockAudio();
+
+      if (shouldPlay) {
+
+        alarmSound.play().catch(err => {
+
+          console.error(
+            'Alarm gagal diputar',
+            err
+          );
+
+          audioModal.classList.remove('hidden');
+        });
+
+      } else {
+
+        alarmSound.pause();
+        alarmSound.currentTime = 0;
+      }
+    }
+  </script>
 
   <!-- TOP CLINICAL NAVBAR -->
   <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      
+
       <!-- Brand Identity -->
       <a href="index.php" class="flex items-center gap-3 group">
         <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
@@ -81,19 +327,28 @@ $activePage = 'dashboard';
 
       <!-- Navigation Menu -->
       <div class="hidden md:flex items-center gap-1">
-        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
           <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
         </a>
-        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
           <i class="bi bi-cpu-fill"></i><span>Devices</span>
         </a>
-        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
           <i class="bi bi-sliders"></i><span>Settings</span>
+        </a>
+        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
+          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
         </a>
       </div>
 
       <!-- Realtime Clock & Status Counter -->
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3">
+        <!-- Indikator SSE — dikontrol oleh dashboard.js via inline style -->
+        <div id="sse-indicator"
+          style="display:none; align-items:center; gap:6px; padding:6px 10px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">
+          <span id="sse-dot" style="width:8px; height:8px; border-radius:50%; background:#cbd5e1; flex-shrink:0; display:inline-block;"></span>
+          <span id="sse-label" style="color:#94a3b8;">Menghubungkan…</span>
+        </div>
         <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
           <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
         </div>
@@ -103,17 +358,21 @@ $activePage = 'dashboard';
 
   <!-- MOBILE BOTTOM NAVIGATION -->
   <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
-    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
       <i class="bi bi-grid-1x2-fill text-lg"></i>
       <span>Dashboard</span>
     </a>
-    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
       <i class="bi bi-cpu-fill text-lg"></i>
       <span>Devices</span>
     </a>
-    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
       <i class="bi bi-sliders text-lg"></i>
       <span>Settings</span>
+    </a>
+    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
+      <i class="bi bi-book-half text-lg"></i>
+      <span>Dokumentasi</span>
     </a>
   </div>
 
@@ -191,132 +450,145 @@ $activePage = 'dashboard';
       <?php foreach ($devices as $dev):
         $persen      = $dev['persen'] ?? 0;
         $isOnline    = $dev['last_update'] && (strtotime($dev['last_update']) >= time() - 30);
-        $isNurse     = (bool)$dev['nurse_call'];
-        
-        // Semantic Rules
-        if ($isNurse) {
-            $statusColor = 'border-red-500 ring-4 ring-red-500/10 bg-red-50/30';
-            $barColor    = 'bg-red-500';
-            $liquidColor = 'bg-red-400';
-        } elseif ($persen <= 10 && $persen > 0) {
-            $statusColor = 'border-amber-400 ring-4 ring-amber-500/5 bg-amber-50/20';
-            $barColor    = 'bg-amber-500';
-            $liquidColor = 'bg-amber-400';
+        $isNurse     = (bool)$dev['nurse_call'] && $isOnline;
+
+        // Semantic Rules (Updated with new percentage layout & color schemes)
+        if (!$isOnline) {
+          // Jika offline, beri tema redup/slate abu-abu
+          $statusColor = 'border-slate-200 bg-slate-50/50';
+          $barColor    = 'bg-slate-400';
+          $liquidColor = 'bg-slate-300';
+        } elseif ($isNurse) {
+          // Kritis darurat (Nurse Call)
+          $statusColor = 'border-red-500 ring-4 ring-red-500/10 bg-red-50/30';
+          $barColor    = 'bg-red-500';
+          $liquidColor = 'bg-red-400';
+        } elseif ($persen > 30) {
+          // > 30% = Cyan
+          $statusColor = 'border-cyan-200 hover:border-cyan-300 bg-cyan-50/10';
+          $barColor    = 'bg-cyan-500';
+          $liquidColor = 'bg-cyan-400';
+        } elseif ($persen > 20) {
+          // 20-30% = Amber
+          $statusColor = 'border-amber-200 hover:border-amber-300 bg-amber-50/10';
+          $barColor    = 'bg-amber-500';
+          $liquidColor = 'bg-amber-400';
         } else {
-            $statusColor = 'border-slate-200 hover:border-slate-300 bg-white';
-            $barColor    = 'bg-[#6b2072]'; // Warna Korporat Ungu
-            $liquidColor = 'bg-[#6b2072]/80';
+          // <= 20% = Kritis Volume Red
+          $statusColor = 'border-red-400 ring-4 ring-red-500/5 bg-red-50/20';
+          $barColor    = 'bg-red-500';
+          $liquidColor = 'bg-red-400';
         }
       ?>
-      <div id="card-<?= htmlspecialchars($dev['device_id']) ?>"
-           data-pasien="<?= htmlspecialchars($dev['pasien']) ?>"
-           data-lokasi="<?= htmlspecialchars($dev['lokasi']) ?>"
-           class="border rounded-2xl p-5 relative overflow-hidden shadow-sm flex flex-col justify-between transition-all <?= $statusColor ?>">
+        <div id="card-<?= htmlspecialchars($dev['device_id']) ?>"
+          data-pasien="<?= htmlspecialchars($dev['pasien']) ?>"
+          data-lokasi="<?= htmlspecialchars($dev['lokasi']) ?>"
+          data-last-created-at="<?= htmlspecialchars($dev['last_update'] ?? '') ?>"
+          class="border rounded-2xl p-5 relative overflow-hidden shadow-sm flex flex-col justify-between transition-all <?= $statusColor ?>">
 
-        <div>
-          <!-- Header Cell: Badges + Action Buttons -->
-          <div class="flex items-start justify-between gap-2 mb-4">
-            <div class="flex items-center gap-3">
-              <!-- Physical Bottle Indicator Simulation -->
-              <div class="w-8 h-12 bg-slate-100 border-2 border-slate-200 rounded-t-md rounded-b-xl relative overflow-hidden flex-shrink-0 shadow-inner">
-                <div data-role="bottle-liquid" class="absolute bottom-0 inset-x-0 transition-all duration-1000 <?= $liquidColor ?>" style="height: <?= $persen ?>%">
-                  <div class="w-full h-1 bg-white/20 absolute top-0"></div>
+          <div>
+            <!-- Header Cell: Badges + Action Buttons -->
+            <div class="flex items-start justify-between gap-2 mb-4">
+              <div class="flex items-center gap-3">
+                <!-- Physical Bottle Indicator Simulation -->
+                <div class="w-8 h-12 bg-slate-100 border-2 border-slate-200 rounded-t-md rounded-b-xl relative overflow-hidden flex-shrink-0 shadow-inner">
+                  <div data-role="bottle-liquid"
+                    style="position:absolute; bottom:0; left:0; right:0; width:100%; height:<?= $persen ?>%; background:<?= $persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444') ?>; transition:height 1s ease-in-out;">
+                    <div style="width:100%; height:4px; background:rgba(255,255,255,0.2); position:absolute; top:0;"></div>
+                  </div>
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900 leading-tight"><?= htmlspecialchars($dev['nama']) ?></h3>
+                  <p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                    <i class="bi bi-geo-alt"></i><?= htmlspecialchars($dev['lokasi']) ?>
+                  </p>
                 </div>
               </div>
-              <div>
-                <h3 class="text-sm font-bold text-slate-900 leading-tight"><?= htmlspecialchars($dev['nama']) ?></h3>
-                <p class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                  <i class="bi bi-geo-alt"></i><?= htmlspecialchars($dev['lokasi']) ?>
-                </p>
+
+              <!-- System Network Status Indicators -->
+              <div class="flex flex-col items-end gap-1.5">
+                <span data-role="online-badge" class="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-black <?= $isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' ?>">
+                  <span class="w-1.5 h-1.5 rounded-full mr-1.5 <?= $isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400' ?>"></span><?= $isOnline ? 'ONLINE' : 'OFFLINE' ?>
+                </span>
+
+                <?php if ($isNurse): ?>
+                  <span data-role="nurse-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold text-white tracking-wider uppercase bg-red-500 animate-medical-pulse">
+                    <i class="bi bi-bell-fill text-[8px]"></i> NURSE CALL
+                  </span>
+                <?php endif; ?>
               </div>
             </div>
 
-            <!-- System Network Status Indicators -->
-            <div class="flex flex-col items-end gap-1.5">
-              <span data-role="online-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase border <?= $isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200' ?>">
-                <span class="w-1 h-1 rounded-full <?= $isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400' ?>"></span>
-                <?= $isOnline ? 'Connected' : 'Offline' ?>
+            <!-- Patient Identity Attachment -->
+            <div class="bg-slate-100/80 border border-slate-200/60 rounded-xl p-2.5 mb-4 flex items-center justify-between">
+              <div class="flex items-center gap-2 truncate">
+                <div class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center flex-shrink-0 text-slate-500">
+                  <i class="bi bi-person-fill text-xs"></i>
+                </div>
+                <span class="text-xs font-bold text-slate-700 truncate"><?= htmlspecialchars($dev['pasien']) ?></span>
+              </div>
+              <span data-role="mode-badge" class="text-[10px] font-extrabold bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-500 uppercase tracking-wide"><?= htmlspecialchars($dev['mode'] ?? '-') ?></span>
+            </div>
+
+            <!-- Precise Quantities (TPM & Volume Metrics) -->
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
+                <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Flow Rate</span>
+                <div class="text-xl font-black text-slate-900 mt-0.5">
+                  <span data-role="tpm-value"><?= number_format($dev['tpm'] ?? 0) ?></span>
+                  <span class="text-xs font-medium text-slate-400">TPM</span>
+                </div>
+              </div>
+              <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
+                <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Sisa Cairan</span>
+                <!-- SESUDAH (BIARKAN SEPERTI INI DI INDEX.PHP) -->
+                <div class="text-xl font-black text-slate-900 mt-0.5">
+                  <span data-role="volume-display"><?= number_format($dev['volume_sisa'] ?? 0) ?></span><span class="text-xs font-medium text-slate-400">/<?= number_format($dev['volume_awal'] ?? 0) ?>mL</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Volumetric Progress Linear Bars -->
+            <div class="mb-4">
+              <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+                <span>Rasio Infus</span>
+                <span data-role="persen-text" class="text-slate-700 font-extrabold text-xs"><?= number_format($persen, 0) ?>%</span>
+              </div>
+              <div class="w-full h-2 bg-slate-100 border border-slate-200/80 rounded-full overflow-hidden">
+                <div data-role="progress-bar"
+                  style="height:100%; border-radius:9999px; transition:width .5s ease-in-out; width:<?= $persen ?>%; background:<?= $isNurse ? '#ef4444' : ($persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444')) ?>;"></div>
+              </div>
+
+              <div data-role="low-warning" class="mt-2 text-[10px] font-bold text-red-500 flex items-center gap-1 <?= $persen <= 20 ? '' : 'hidden' ?>">
+                <i class="bi bi-exclamation-triangle-fill"></i> Perhatian: Kritis, segera ganti infus baru!
+              </div>
+            </div>
+
+            <!-- Time Frame Remaining Estimates -->
+            <div class="bg-slate-50/60 border border-slate-200/40 rounded-xl px-3 py-2 flex items-center justify-between mb-4">
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimasi Sisa Waktu</span>
+              <span data-role="estimasi-value" class="text-xs font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200/60 shadow-sm tabular-nums">
+                <?= $dev['estimasi_jam'] ?>j <?= $dev['estimasi_mnt'] ?>m
               </span>
-              
-              <?php if($isNurse): ?>
-              <span data-role="nurse-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold text-white tracking-wider uppercase bg-red-500 animate-medical-pulse">
-                <i class="bi bi-bell-fill text-[8px]"></i> NURSE CALL
-              </span>
-              <?php endif; ?>
             </div>
           </div>
 
-          <!-- Patient Identity Attachment -->
-          <div class="bg-slate-100/80 border border-slate-200/60 rounded-xl p-2.5 mb-4 flex items-center justify-between">
-            <div class="flex items-center gap-2 truncate">
-              <div class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center flex-shrink-0 text-slate-500">
-                <i class="bi bi-person-fill text-xs"></i>
-              </div>
-              <span class="text-xs font-bold text-slate-700 truncate"><?= htmlspecialchars($dev['pasien']) ?></span>
-            </div>
-            <span data-role="mode-badge" class="text-[10px] font-extrabold bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-500 uppercase tracking-wide"><?= htmlspecialchars($dev['mode'] ?? '-') ?></span>
-          </div>
-
-          <!-- Precise Quantities (TPM & Volume Metrics) -->
-          <div class="grid grid-cols-2 gap-3 mb-4">
-            <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
-              <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Flow Rate</span>
-              <div class="text-xl font-black text-slate-900 mt-0.5">
-                <span data-role="tpm-value"><?= number_format($dev['tpm'] ?? 0) ?></span>
-                <span class="text-xs font-medium text-slate-400">TPM</span>
-              </div>
-            </div>
-            <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
-              <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Sisa Cairan</span>
-              <!-- SESUDAH (BIARKAN SEPERTI INI DI INDEX.PHP) -->
-<div class="text-xl font-black text-slate-900 mt-0.5">
-  <span data-role="volume-display"><?= number_format($dev['volume_sisa'] ?? 0) ?></span><span class="text-xs font-medium text-slate-400">/<?= number_format($dev['volume_awal'] ?? 0) ?>mL</span>
-</div>
-            </div>
-          </div>
-
-          <!-- Volumetric Progress Linear Bars -->
-          <div class="mb-4">
-            <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-              <span>Rasio Infus</span>
-              <span data-role="persen-text" class="text-slate-700 font-extrabold text-xs"><?= number_format($persen,0) ?>%</span>
-            </div>
-            <div class="w-full h-2 bg-slate-100 border border-slate-200/80 rounded-full overflow-hidden">
-              <div data-role="progress-bar" class="h-full rounded-full transition-all duration-1000 <?= $barColor ?>" style="width: <?= $persen ?>%"></div>
-            </div>
-            
-            <?php if ($persen <= 20): ?>
-            <div data-role="low-warning" class="mt-2 text-[10px] font-bold text-red-500 flex items-center gap-1">
-              <i class="bi bi-exclamation-triangle-fill"></i> Perhatian: Kritis, segera ganti infus baru!
-            </div>
-            <?php endif; ?>
-          </div>
-
-          <!-- Time Frame Remaining Estimates -->
-          <div class="bg-slate-50/60 border border-slate-200/40 rounded-xl px-3 py-2 flex items-center justify-between mb-4">
-            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimasi Sisa Waktu</span>
-            <span data-role="estimasi-value" class="text-xs font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200/60 shadow-sm tabular-nums">
-              <?= $dev['estimasi_jam'] ?>j <?= $dev['estimasi_mnt'] ?>m
+          <!-- Cell Interactive Footer Control -->
+          <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
+            <span data-role="last-update" class="text-[10px] font-medium text-slate-400 flex items-center gap-1">
+              <i class="bi bi-clock-history"></i> Update: <?= $dev['last_update'] ? date('H:i:s', strtotime($dev['last_update'])) : 'N/A' ?>
             </span>
+            <div class="flex items-center gap-2">
+              <a href="devices.php?edit=<?= urlencode($dev['device_id']) ?>" class="p-2 bg-white border border-slate-200 hover:border-amber-300 rounded-xl text-amber-500 hover:bg-amber-50 active:scale-90 transition-all text-xs" title="Edit Device">
+                <i class="bi bi-pencil-fill"></i>
+              </a>
+              <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all">
+                PERIKSA
+              </a>
+            </div>
           </div>
-        </div>
 
-        <!-- Cell Interactive Footer Control -->
-        <div class="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
-          <span data-role="last-update" class="text-[10px] font-medium text-slate-400 flex items-center gap-1">
-            <i class="bi bi-clock-history"></i> Update: <?= $dev['last_update'] ? date('H:i:s', strtotime($dev['last_update'])) : 'N/A' ?>
-          </span>
-          <div class="flex items-center gap-2">
-            <a href="devices.php?edit=<?= urlencode($dev['device_id']) ?>" class="p-2 bg-white border border-slate-200 hover:border-amber-300 rounded-xl text-amber-500 hover:bg-amber-50 active:scale-90 transition-all text-xs" title="Edit Device">
-              <i class="bi bi-pencil-fill"></i>
-            </a>
-            <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm active:scale-95 transition-all">
-              PERIKSA
-            </a>
-          </div>
         </div>
-
-      </div>
       <?php endforeach; ?>
     </div>
 
@@ -345,25 +617,25 @@ $activePage = 'dashboard';
             </thead>
             <tbody id="nurse-log-tbody" class="divide-y divide-slate-100 text-sm">
               <?php foreach ($nurseLogs as $log): ?>
-              <tr class="hover:bg-slate-50/80 transition-colors">
-                <td class="py-4 px-6 font-bold text-slate-500 tabular-nums"><?= date('H:i:s', strtotime($log['created_at'])) ?></td>
-                <td class="py-4 px-6">
-                  <div class="font-bold text-slate-900"><?= htmlspecialchars($log['pasien'] ?? 'Pasien Anonim') ?></div>
-                  <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <i class="bi bi-geo-alt text-[11px]"></i><?= htmlspecialchars($log['lokasi'] ?? '-') ?>
-                  </div>
-                </td>
-                <td class="py-4 px-6 font-semibold text-slate-400 font-mono text-xs"><?= htmlspecialchars($log['device_id']) ?></td>
-              </tr>
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                  <td class="py-4 px-6 font-bold text-slate-500 tabular-nums"><?= date('H:i:s', strtotime($log['created_at'])) ?></td>
+                  <td class="py-4 px-6">
+                    <div class="font-bold text-slate-900"><?= htmlspecialchars($log['pasien'] ?? 'Pasien Anonim') ?></div>
+                    <div class="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                      <i class="bi bi-geo-alt text-[11px]"></i><?= htmlspecialchars($log['lokasi'] ?? '-') ?>
+                    </div>
+                  </td>
+                  <td class="py-4 px-6 font-semibold text-slate-400 font-mono text-xs"><?= htmlspecialchars($log['device_id']) ?></td>
+                </tr>
               <?php endforeach; ?>
-              
+
               <?php if (empty($nurseLogs)): ?>
-              <tr>
-                <td colspan="3" class="py-12 text-center text-xs font-bold text-slate-400 tracking-wider uppercase">
-                  <i class="bi bi-shield-check text-2xl block text-slate-300 mb-2"></i>
-                  Sistem Aman — Belum Ada Log Masuk
-                </td>
-              </tr>
+                <tr>
+                  <td colspan="3" class="py-12 text-center text-xs font-bold text-slate-400 tracking-wider uppercase">
+                    <i class="bi bi-shield-check text-2xl block text-slate-300 mb-2"></i>
+                    Sistem Aman — Belum Ada Log Masuk
+                  </td>
+                </tr>
               <?php endif; ?>
             </tbody>
           </table>
@@ -382,9 +654,9 @@ $activePage = 'dashboard';
   <script>
     function updateClock() {
       const now = new Date();
-      const h = String(now.getHours()).padStart(2,'0');
-      const m = String(now.getMinutes()).padStart(2,'0');
-      const s = String(now.getSeconds()).padStart(2,'0');
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
       const el = document.getElementById('clockText');
       if (el) el.textContent = h + ':' + m + ':' + s;
     }
@@ -393,4 +665,5 @@ $activePage = 'dashboard';
   </script>
   <script src="assets/js/dashboard.js"></script>
 </body>
+
 </html>
