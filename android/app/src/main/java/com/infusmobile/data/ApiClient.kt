@@ -87,6 +87,7 @@ private fun parseDevice(json: JSONObject): Device {
         nurseCall = json.optInt("nurse_call"),
         mode = json.optString("mode"),
         createdAt = json.optString("created_at"),
+        isOnline = json.optBoolean("is_online", false),
     )
 }
 

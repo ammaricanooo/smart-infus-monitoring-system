@@ -15,4 +15,5 @@ data class Device(
     val nurseCall: Int,
     val mode: String,
     val createdAt: String,
+    val isOnline: Boolean,
 )

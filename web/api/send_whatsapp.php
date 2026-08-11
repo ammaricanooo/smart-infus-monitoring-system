@@ -21,6 +21,30 @@ require_once __DIR__ . '/../config/whatsapp.php';
 $raw  = file_get_contents('php://input');
 $data = json_decode($raw, true);
 
+// ── Verifikasi API Key menggunakan pengaturan superadmin (iot_api_key) ──────────────
+$expectedApiKey = getSetting('iot_api_key', '');
+if (!empty($expectedApiKey)) {
+    // 1. Cek dari Header HTTP (X-API-Key)
+    $providedKey = $_SERVER['HTTP_X_API_KEY'] ?? '';
+    
+    // 2. Cek dari Query Parameter (?api_key=...)
+    if (empty($providedKey)) {
+        $providedKey = $_GET['api_key'] ?? '';
+    }
+    
+    // 3. Cek dari JSON Body
+    if (empty($providedKey) && is_array($data)) {
+        $providedKey = $data['api_key'] ?? '';
+    }
+    
+    // Bandingkan dengan aman dari timing attack
+    if (empty($providedKey) || !hash_equals($expectedApiKey, $providedKey)) {
+        http_response_code(401);
+        echo json_encode(['status' => 'error', 'message' => 'Unauthorized: API Key tidak valid atau tidak disertakan']);
+        exit;
+    }
+}
+
 if (!$data || empty($data['device_id']) || empty($data['type'])) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'Parameter tidak lengkap']);

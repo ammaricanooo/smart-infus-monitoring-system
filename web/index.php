@@ -4,6 +4,8 @@
 // =====================================================
 
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/auth.php';
+requireAccess('dashboard');
 
 $db = getDB();
 
@@ -71,13 +73,13 @@ $activePage = 'dashboard';
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 </head>
 
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-primary/10 selection:text-primary">
 
-  <div id="audio-blocked-modal" class="hidden fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 select-none animate-fade-in">
+  <div id="audio-blocked-modal" class="hidden fixed inset-0 z-100 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 select-none animate-fade-in">
     <div class="bg-white p-6 rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200">
 
       <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-4">
-        <div class="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center flex-shrink-0 border border-red-100">
+        <div class="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0 border border-red-100">
           <i class="bi bi-volume-mute-fill text-xl"></i>
         </div>
         <div>
@@ -91,7 +93,7 @@ $activePage = 'dashboard';
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-700 space-y-2">
           <div class="flex gap-2">
-            <span class="flex-shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">1</span>
+            <span class="shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">1</span>
             <span>Buka tab baru di Chrome, lalu ketik/salin tautan ini di address bar:
               <button
                 type="button"
@@ -105,11 +107,11 @@ $activePage = 'dashboard';
             </span>
           </div>
           <div class="flex gap-2">
-            <span class="flex-shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">2</span>
+            <span class="shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">2</span>
             <span>Scroll ke bawah ke menu <b class="text-slate-900">"Allowed to play sound"</b> (Diizinkan memutar suara) lalu klik <b class="text-slate-900">Add</b>.</span>
           </div>
           <div class="flex gap-2">
-            <span class="flex-shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">3</span>
+            <span class="shrink-0 w-4 h-4 bg-slate-900 text-white rounded-full text-[9px] font-bold flex items-center justify-center">3</span>
             <span class="flex flex-col">
               <span>Masukkan domain/URL dashboard ini:</span>
               <button
@@ -131,7 +133,7 @@ $activePage = 'dashboard';
         <button onclick="window.location.reload()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200">
           <i class="bi bi-arrow-clockwise mr-1"></i> CEK ULANG (REFRESH)
         </button>
-        <button id="audio-allow-temp" onclick="document.getElementById('audio-blocked-modal').classList.add('hidden')" class="flex-1 py-2 bg-[#6b2072] hover:bg-[#55195b] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#6b2072]/20">
+        <button id="audio-allow-temp" onclick="document.getElementById('audio-blocked-modal').classList.add('hidden')" class="flex-1 py-2 bg-primary hover:bg-[#55195b] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-primary/20">
           IZINKAN SEMENTARA
         </button>
       </div>
@@ -310,71 +312,7 @@ $activePage = 'dashboard';
     }
   </script>
 
-  <!-- TOP CLINICAL NAVBAR -->
-  <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-
-      <!-- Brand Identity -->
-      <a href="index.php" class="flex items-center gap-3 group">
-        <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
-          <i class="bi bi-droplet-fill text-lg"></i>
-        </div>
-        <div>
-          <div class="text-xs font-black tracking-wider text-slate-900 uppercase">Smart Infus</div>
-          <div class="text-[10px] font-bold text-[#6b2072] tracking-widest uppercase">Central Station</div>
-        </div>
-      </a>
-
-      <!-- Navigation Menu -->
-      <div class="hidden md:flex items-center gap-1">
-        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
-        </a>
-        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-cpu-fill"></i><span>Devices</span>
-        </a>
-        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-sliders"></i><span>Settings</span>
-        </a>
-        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage === 'docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
-        </a>
-      </div>
-
-      <!-- Realtime Clock & Status Counter -->
-      <div class="flex items-center gap-3">
-        <!-- Indikator SSE — dikontrol oleh dashboard.js via inline style -->
-        <div id="sse-indicator"
-          style="display:none; align-items:center; gap:6px; padding:6px 10px; border-radius:8px; border:1px solid #e2e8f0; background:#f8fafc; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">
-          <span id="sse-dot" style="width:8px; height:8px; border-radius:50%; background:#cbd5e1; flex-shrink:0; display:inline-block;"></span>
-          <span id="sse-label" style="color:#94a3b8;">Menghubungkan…</span>
-        </div>
-        <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-          <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <!-- MOBILE BOTTOM NAVIGATION -->
-  <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
-    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-grid-1x2-fill text-lg"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-cpu-fill text-lg"></i>
-      <span>Devices</span>
-    </a>
-    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-sliders text-lg"></i>
-      <span>Settings</span>
-    </a>
-    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage === 'docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-book-half text-lg"></i>
-      <span>Dokumentasi</span>
-    </a>
-  </div>
+  <?php $showSseIndicator = true; require __DIR__ . '/config/navbar.php'; ?>
 
   <!-- MAIN DASHBOARD CONTENT -->
   <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
@@ -436,7 +374,7 @@ $activePage = 'dashboard';
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-4 mb-6 gap-3">
       <div>
         <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
-          <span class="w-1.5 h-4 bg-[#6b2072] rounded-full inline-block"></span>
+          <span class="w-1.5 h-4 bg-primary rounded-full inline-block"></span>
           Bangsal Perawatan Real-time
         </h2>
       </div>
@@ -491,9 +429,9 @@ $activePage = 'dashboard';
             <div class="flex items-start justify-between gap-2 mb-4">
               <div class="flex items-center gap-3">
                 <!-- Physical Bottle Indicator Simulation -->
-                <div class="w-8 h-12 bg-slate-100 border-2 border-slate-200 rounded-t-md rounded-b-xl relative overflow-hidden flex-shrink-0 shadow-inner">
+                <div class="w-8 h-12 bg-slate-100 border-2 border-slate-200 rounded-t-md rounded-b-xl relative overflow-hidden shrink-0 shadow-inner">
                   <div data-role="bottle-liquid"
-                    style="position:absolute; bottom:0; left:0; right:0; width:100%; height:<?= $persen ?>%; background:<?= $persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444') ?>; transition:height 1s ease-in-out;">
+                    style="position:absolute; bottom:0; left:0; right:0; width:100%; height:<?= $persen ?>%; background:<?= !$isOnline ? '#94a3b8' : ($isNurse ? '#ef4444' : ($persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444'))) ?>; transition:height 1s ease-in-out;">
                     <div style="width:100%; height:4px; background:rgba(255,255,255,0.2); position:absolute; top:0;"></div>
                   </div>
                 </div>
@@ -522,7 +460,7 @@ $activePage = 'dashboard';
             <!-- Patient Identity Attachment -->
             <div class="bg-slate-100/80 border border-slate-200/60 rounded-xl p-2.5 mb-4 flex items-center justify-between">
               <div class="flex items-center gap-2 truncate">
-                <div class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center flex-shrink-0 text-slate-500">
+                <div class="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center shrink-0 text-slate-500">
                   <i class="bi bi-person-fill text-xs"></i>
                 </div>
                 <span class="text-xs font-bold text-slate-700 truncate"><?= htmlspecialchars($dev['pasien']) ?></span>
@@ -556,7 +494,7 @@ $activePage = 'dashboard';
               </div>
               <div class="w-full h-2 bg-slate-100 border border-slate-200/80 rounded-full overflow-hidden">
                 <div data-role="progress-bar"
-                  style="height:100%; border-radius:9999px; transition:width .5s ease-in-out; width:<?= $persen ?>%; background:<?= $isNurse ? '#ef4444' : ($persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444')) ?>;"></div>
+                  style="height:100%; border-radius:9999px; transition:width .5s ease-in-out; width:<?= $persen ?>%; background:<?= !$isOnline ? '#cbd5e1' : ($isNurse ? '#ef4444' : ($persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444'))) ?>;"></div>
               </div>
 
               <div data-role="low-warning" class="mt-2 text-[10px] font-bold text-red-500 flex items-center gap-1 <?= $persen <= 20 ? '' : 'hidden' ?>">
@@ -650,19 +588,6 @@ $activePage = 'dashboard';
     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
 
-  <!-- REALTIME JAVASCRIPT CLOCK PIPELINE -->
-  <script>
-    function updateClock() {
-      const now = new Date();
-      const h = String(now.getHours()).padStart(2, '0');
-      const m = String(now.getMinutes()).padStart(2, '0');
-      const s = String(now.getSeconds()).padStart(2, '0');
-      const el = document.getElementById('clockText');
-      if (el) el.textContent = h + ':' + m + ':' + s;
-    }
-    updateClock();
-    setInterval(updateClock, 1000);
-  </script>
   <script src="assets/js/dashboard.js"></script>
 </body>
 

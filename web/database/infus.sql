@@ -123,3 +123,84 @@ INSERT INTO `devices` (`device_id`, `nama`, `lokasi`, `pasien`) VALUES
 --   ('wa_nurse_call_msg',   'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
 --   ('wa_low_volume_msg',   'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.');
 -- =====================================================
+
+-- =====================================================
+-- MIGRATION: users & new settings (auth system v2)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `users` (
+  `id`         INT(11)      NOT NULL AUTO_INCREMENT,
+  `username`   VARCHAR(50)  NOT NULL UNIQUE,
+  `password`   VARCHAR(255) NOT NULL,
+  `nama`       VARCHAR(100) NOT NULL DEFAULT '',
+  `role`       ENUM('superadmin','admin','nurse') NOT NULL DEFAULT 'nurse',
+  `aktif`      TINYINT(1)   NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Superadmin default (password: admin123)
+INSERT IGNORE INTO `users` (`username`, `password`, `nama`, `role`) VALUES
+  ('superadmin', '$2y$10$aqs.JSQ6D/s2Ezjk7WUOGuXTaJcdRSNOKxx64I1UP0rjj3I.RlakK', 'Super Administrator', 'superadmin');
+
+-- Settings baru: login_required + template WA suster vs keluarga
+INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
+  ('login_required',            '0'),
+  ('wa_nurse_call_msg_suster',  'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
+  ('wa_nurse_call_msg_keluarga','PEMBERITAHUAN 🔔\nPasien {pasien} di {lokasi} membutuhkan bantuan perawat.\nWaktu: {waktu}\n\nTim medis sedang menuju lokasi.'),
+  ('wa_low_volume_msg_suster',  'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.'),
+  ('wa_low_volume_msg_keluarga','INFO INFUS ℹ️\nCairan infus {pasien} di {lokasi} hampir habis ({persen}%).\nWaktu: {waktu}\n\nTim medis sedang menangani.'),
+  ('wa_tpm_zero_msg_suster',    'INFUS MACET 🔴\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml\nWaktu: {waktu}\n\nTidak ada tetesan terdeteksi. Periksa selang segera.'),
+  ('wa_tpm_zero_msg_keluarga',  'INFO TEKNIS ℹ️\nPerangkat infus {pasien} di {lokasi} mendeteksi anomali.\nWaktu: {waktu}\n\nTim medis sedang menangani.'),
+  ('wa_tpm_high_msg_suster',    'TPM TERLALU CEPAT ⚡\nPasien: {pasien}\nLokasi: {lokasi}\nTPM: {tpm} tetes/menit\nWaktu: {waktu}\n\nHarap periksa dan sesuaikan pengaturan.'),
+  ('wa_tpm_high_msg_keluarga',  'INFO TEKNIS ℹ️\nPerangkat infus {pasien} di {lokasi} membutuhkan penyesuaian.\nWaktu: {waktu}\n\nTim medis sedang menangani.'),
+  ('wa_resolved_msg_keluarga',  'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.');
+
+-- =====================================================
+-- MIGRATION: USERS TABLE + NEW SETTINGS
+-- Jalankan setelah schema awal sudah ada
+-- (atau jalankan full SQL dari awal untuk fresh install)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `users` (
+  `id`         INT(11)      NOT NULL AUTO_INCREMENT,
+  `username`   VARCHAR(50)  NOT NULL UNIQUE,
+  `password`   VARCHAR(255) NOT NULL,
+  `nama`       VARCHAR(100) NOT NULL DEFAULT '',
+  `role`       ENUM('superadmin','admin','nurse') NOT NULL DEFAULT 'nurse',
+  `aktif`      TINYINT(1)   NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Superadmin default (password: admin123)
+INSERT IGNORE INTO `users` (`username`, `password`, `nama`, `role`) VALUES
+  ('superadmin', '$2y$10$aqs.JSQ6D/s2Ezjk7WUOGuXTaJcdRSNOKxx64I1UP0rjj3I.RlakK', 'Super Administrator', 'superadmin');
+
+-- Settings baru
+INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
+  ('login_required',             '0'),
+  ('wa_nurse_call_msg_suster',   'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
+  ('wa_nurse_call_msg_keluarga', 'PEMBERITAHUAN 🔔\nPasien {pasien} di {lokasi} membutuhkan bantuan perawat.\nWaktu: {waktu}\n\nTim medis sedang menuju lokasi.'),
+  ('wa_low_volume_msg_suster',   'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.'),
+  ('wa_low_volume_msg_keluarga', 'INFO INFUS ℹ️\nCairan infus {pasien} di {lokasi} hampir habis ({persen}%).\nWaktu: {waktu}\n\nTim medis sedang menangani.'),
+  ('wa_tpm_zero_msg_suster',     'INFUS MACET 🔴\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml\nWaktu: {waktu}\n\nTidak ada tetesan terdeteksi. Periksa selang segera.'),
+  ('wa_tpm_zero_msg_keluarga',   'INFO TEKNIS ℹ️\nPerangkat infus {pasien} di {lokasi} mendeteksi anomali.\nWaktu: {waktu}\n\nTim medis sedang menangani.'),
+  ('wa_tpm_high_msg_suster',     'TPM TERLALU CEPAT ⚡\nPasien: {pasien}\nLokasi: {lokasi}\nTPM: {tpm} tetes/menit\nWaktu: {waktu}\n\nHarap periksa dan sesuaikan pengaturan.'),
+  ('wa_tpm_high_msg_keluarga',   'INFO TEKNIS ℹ️\nPerangkat infus {pasien} di {lokasi} membutuhkan penyesuaian.\nWaktu: {waktu}\n\nTim medis sedang menangani.'),
+  ('wa_resolved_msg_keluarga',   'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.');
+
+-- =====================================================
+-- MIGRATION: wa_provider (dual gateway support)
+-- Tambahkan setting ini jika belum ada
+-- =====================================================
+INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
+  ('wa_provider', 'custom');
+
+-- Untuk instalasi lama yang sudah pakai fonnte_token dan
+-- belum punya wa_api_url, jalankan query ini untuk migrasi
+-- otomatis ke provider fonnte:
+-- UPDATE `settings` SET `key_value` = 'fonnte'
+--   WHERE `key_name` = 'wa_provider'
+--     AND EXISTS (SELECT 1 FROM (SELECT key_value FROM settings WHERE key_name = 'fonnte_token') t WHERE t.key_value != '')
+--     AND NOT EXISTS (SELECT 1 FROM (SELECT key_value FROM settings WHERE key_name = 'wa_api_url') t WHERE t.key_value != '');

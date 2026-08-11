@@ -31,6 +31,30 @@ require_once __DIR__ . '/../config/whatsapp.php';
 $raw  = file_get_contents('php://input');
 $data = json_decode($raw, true);
 
+// ── Verifikasi API Key menggunakan pengaturan superadmin (iot_api_key) ──────────────
+$expectedApiKey = getSetting('iot_api_key', '');
+if (!empty($expectedApiKey)) {
+    // 1. Cek dari Header HTTP (X-API-Key)
+    $providedKey = $_SERVER['HTTP_X_API_KEY'] ?? '';
+    
+    // 2. Cek dari Query Parameter (?api_key=...)
+    if (empty($providedKey)) {
+        $providedKey = $_GET['api_key'] ?? '';
+    }
+    
+    // 3. Cek dari JSON Body
+    if (empty($providedKey) && is_array($data)) {
+        $providedKey = $data['api_key'] ?? '';
+    }
+    
+    // Bandingkan dengan aman dari timing attack
+    if (empty($providedKey) || !hash_equals($expectedApiKey, $providedKey)) {
+        http_response_code(401);
+        echo json_encode(['status' => 'error', 'message' => 'Unauthorized: API Key tidak valid atau tidak disertakan']);
+        exit;
+    }
+}
+
 if (!$data || !isset($data['device_id'])) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'Data tidak valid']);
@@ -202,27 +226,6 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
     $noSuster   = trim($dev['no_suster']   ?? '');
     $noKeluarga = trim($dev['no_keluarga'] ?? '');
 
-    // Notif 'resolved' hanya ke keluarga
-    $isResolved = ($type === 'resolved');
-    if ($isResolved) {
-        if (empty($noKeluarga)) return;
-        $targets = [$noKeluarga];
-    } else {
-        $targets = array_filter([$noSuster, $noKeluarga]);
-        if (empty($targets)) return;
-    }
-
-    $templateKey = match($type) {
-        'nurse_call'  => 'wa_nurse_call_msg',
-        'low_volume'  => 'wa_low_volume_msg',
-        'tpm_zero'    => 'wa_tpm_zero_msg',
-        'tpm_high'    => 'wa_tpm_high_msg',
-        'resolved'    => 'wa_resolved_msg',
-        default       => 'wa_low_volume_msg',
-    };
-    $template = getSetting($templateKey, '');
-    if (empty($template)) return;
-
     $full = $db->prepare("SELECT * FROM devices WHERE device_id = :id");
     $full->execute([':id' => $device_id]);
     $device = $full->fetch();
@@ -236,7 +239,7 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
         default      => 'kondisi kembali normal',
     };
 
-    $message = renderWaMessage($template, [
+    $vars = [
         'pasien'         => $device['pasien']  ?: '-',
         'lokasi'         => $device['lokasi']  ?: '-',
         'volume'         => round($volume),
@@ -245,9 +248,58 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
         'waktu'          => date('d/m/Y H:i:s'),
         'device'         => $device_id,
         'resolved_label' => $resolvedLabel,
-    ]);
+    ];
 
-    sendWhatsApp(array_values($targets), $message);
+    // Map type ke setting key suster & keluarga
+    $isResolved = ($type === 'resolved');
+
+    if ($isResolved) {
+        // Resolved: hanya ke keluarga, satu template
+        if (empty($noKeluarga)) return;
+        $templateKey = 'wa_resolved_msg_keluarga';
+        $template    = getSetting($templateKey, getSetting('wa_resolved_msg', ''));
+        if (empty($template)) return;
+        $message = renderWaMessage($template, $vars);
+        sendWhatsApp([$noKeluarga], $message);
+    } else {
+        // Kirim dua request terpisah: satu ke suster, satu ke keluarga
+        $keyMap = [
+            'nurse_call' => ['suster' => 'wa_nurse_call_msg_suster',  'keluarga' => 'wa_nurse_call_msg_keluarga'],
+            'low_volume' => ['suster' => 'wa_low_volume_msg_suster',   'keluarga' => 'wa_low_volume_msg_keluarga'],
+            'tpm_zero'   => ['suster' => 'wa_tpm_zero_msg_suster',     'keluarga' => 'wa_tpm_zero_msg_keluarga'],
+            'tpm_high'   => ['suster' => 'wa_tpm_high_msg_suster',     'keluarga' => 'wa_tpm_high_msg_keluarga'],
+        ];
+
+        // Fallback ke old single key jika new key belum ada di settings
+        $fallbackKey = match($type) {
+            'nurse_call' => 'wa_nurse_call_msg',
+            'low_volume' => 'wa_low_volume_msg',
+            'tpm_zero'   => 'wa_tpm_zero_msg',
+            'tpm_high'   => 'wa_tpm_high_msg',
+            default      => '',
+        };
+
+        $keys = $keyMap[$type] ?? null;
+        if (!$keys) return;
+
+        // Kirim ke suster
+        if (!empty($noSuster)) {
+            $tmplSuster = getSetting($keys['suster'], getSetting($fallbackKey, ''));
+            if (!empty($tmplSuster)) {
+                $msgSuster = renderWaMessage($tmplSuster, $vars);
+                sendWhatsApp([$noSuster], $msgSuster);
+            }
+        }
+
+        // Kirim ke keluarga
+        if (!empty($noKeluarga)) {
+            $tmplKeluarga = getSetting($keys['keluarga'], getSetting($fallbackKey, ''));
+            if (!empty($tmplKeluarga)) {
+                $msgKeluarga = renderWaMessage($tmplKeluarga, $vars);
+                sendWhatsApp([$noKeluarga], $msgKeluarga);
+            }
+        }
+    }
 }
 
 // auto-register device jika belum ada, atau aktifkan kembali jika pernah dinonaktifkan
@@ -275,25 +327,10 @@ if (!$existingDev) {
     $devReactivate->execute([':device_id' => $device_id]);
 }
 
-// ── Pembersihan Data Otomatis Probabilistik (Peluang 1% Per Post) ──
-if (mt_rand(1, 100) === 1) {
-    try {
-        $infusDays = (int)getSetting('db_infus_data_retention', '3');
-        $logDays   = (int)getSetting('db_nurse_log_retention', '7');
-        
-        if ($infusDays > 0) {
-            $pruneInfus = $db->prepare("DELETE FROM infus_data WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
-            $pruneInfus->execute([':days' => $infusDays]);
-        }
-        
-        if ($logDays > 0) {
-            $pruneNurse = $db->prepare("DELETE FROM nurse_call_log WHERE status = 0 AND resolved_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
-            $pruneNurse->execute([':days' => $logDays]);
-        }
-    } catch (\Throwable $e) {
-        error_log("Database auto-pruning failed: " . $e->getMessage());
-    }
-}
+// ── Pembersihan Data Otomatis Terjadwal (Offloaded) ──
+// Logika pembersihan otomatis (probabilistik 1%) telah dipindahkan ke skrip mandiri
+// di `/api/cron_prune.php` untuk meningkatkan performa respon API alat infus.
+// Jalankan skrip tersebut via Cron Job server secara berkala.
 
 echo json_encode([
     'status'  => 'ok',

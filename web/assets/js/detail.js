@@ -173,7 +173,7 @@ function getIdVoice() {
 // Play ringtone — resolve saat selesai ATAU timeout 10 detik (safety)
 function playRingtone() {
   return new Promise(resolve => {
-    if (nurseLoopStopped) {
+    if (window.globalNotificationsActive || nurseLoopStopped) {
       resolve();
       return;
     }
@@ -206,6 +206,7 @@ function playRingtone() {
 // TTS — resolve saat selesai bicara, dengan timeout safety 15 detik
 function speak(text) {
   return new Promise(resolve => {
+    if (window.globalNotificationsActive) { resolve(); return; }
     if (!window.speechSynthesis) { resolve(); return; }
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(text);
@@ -351,6 +352,7 @@ function escHtml(str) {
 
 // Buat toast element dan masukkan ke container
 function createToast(id, html, autoClose = 10000) {
+  if (window.globalNotificationsActive) { return null; }
   const old = document.getElementById(id);
   if (old) old.remove();
 

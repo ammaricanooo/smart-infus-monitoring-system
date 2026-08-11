@@ -6,6 +6,9 @@
  */
 
 require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/auth.php';
+
+requireAccess('devices'); // hanya superadmin/admin yang boleh akses
 
 $db      = getDB();
 $message = '';
@@ -113,67 +116,9 @@ $activePage = 'devices';
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072]">
 
-  <!-- TOP CLINICAL NAVBAR -->
-  <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      
-      <!-- Brand Identity -->
-      <a href="index.php" class="flex items-center gap-3 group">
-        <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
-          <i class="bi bi-droplet-fill text-lg"></i>
-        </div>
-        <div>
-          <div class="text-xs font-black tracking-wider text-slate-900 uppercase">Smart Infus</div>
-          <div class="text-[10px] font-bold text-[#6b2072] tracking-widest uppercase">Central Station</div>
-        </div>
-      </a>
-
-      <!-- Navigation Menu -->
-      <div class="hidden md:flex items-center gap-1">
-        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
-        </a>
-        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-cpu-fill"></i><span>Devices</span>
-        </a>
-        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-sliders"></i><span>Settings</span>
-        </a>
-        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
-        </a>
-      </div>
-
-      <!-- Realtime Clock Placeholder -->
-      <div class="flex items-center gap-4">
-        <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-          <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <!-- MOBILE BOTTOM NAVIGATION -->
-  <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
-    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-grid-1x2-fill text-lg"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-cpu-fill text-lg"></i>
-      <span>Devices</span>
-    </a>
-    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-sliders text-lg"></i>
-      <span>Settings</span>
-    </a>
-    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-book-half text-lg"></i>
-      <span>Dokumentasi</span>
-    </a>
-  </div>
+  <?php require __DIR__ . '/config/navbar.php'; ?>
 
   <!-- MAIN CONTENT CONTAINER -->
   <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
@@ -375,7 +320,7 @@ $activePage = 'devices';
 
                 <!-- Col: Actions -->
                 <td class="py-4 px-5 text-right">
-                  <div class="flex items-center justify-flex-end gap-1.5">
+                  <div class="flex items-center justify-end gap-1.5">
                     
                     <!-- Detail View Button -->
                     <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>" title="Analisis Grafik"
@@ -425,18 +370,6 @@ $activePage = 'devices';
     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
 
-  <!-- REALTIME JAVASCRIPT CLOCK PIPELINE -->
-  <script>
-    function updateClock() {
-      const now = new Date();
-      const h = String(now.getHours()).padStart(2,'0');
-      const m = String(now.getMinutes()).padStart(2,'0');
-      const s = String(now.getSeconds()).padStart(2,'0');
-      const el = document.getElementById('clockText');
-      if (el) el.textContent = h + ':' + m + ':' + s;
-    }
-    updateClock();
-    setInterval(updateClock, 1000);
-  </script>
+
 </body>
 </html>

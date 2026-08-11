@@ -3,149 +3,21 @@
 // HALAMAN DOKUMENTASI SISTEM UNTUK PERAWAT (SUSTER)
 // =====================================================
 
+require_once __DIR__ . '/config/db.php';
+require_once __DIR__ . '/config/settings.php';
+require_once __DIR__ . '/config/auth.php';
+
+requireAccess('docs');
 $activePage = 'docs';
-?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dokumentasi Perawat — Smart Infus</title>
-  
-  <!-- Local Tailwind CSS -->
-  <link rel="stylesheet" href="assets/css/style.css" />
-  
-  <!-- Typography & Icons -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] pb-16 md:pb-0 font-sans antialiased">
 
-  <!-- TOP CLINICAL NAVBAR -->
-  <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/80">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      
-      <!-- Brand Identity -->
-      <a href="index.php" class="flex items-center gap-3 group">
-        <div class="w-10 h-10 bg-[#6b2072] text-white rounded-xl flex items-center justify-center shadow-lg shadow-[#6b2072]/20 transition-transform group-hover:scale-105">
-          <i class="bi bi-droplet-fill text-lg"></i>
-        </div>
-        <div>
-          <div class="text-xs font-black tracking-wider text-slate-900 uppercase">Smart Infus</div>
-          <div class="text-[10px] font-bold text-[#6b2072] tracking-widest uppercase">Central Station</div>
-        </div>
-      </a>
+$_isLoggedIn  = isLoggedIn();
+$_user        = getCurrentUser();
+$_userRole    = $_user['role'] ?? '';
+$_isSuperAdmin = ($_userRole === 'superadmin');
 
-      <!-- Navigation Menu -->
-      <div class="hidden md:flex items-center gap-1">
-        <a href="index.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='dashboard' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span>
-        </a>
-        <a href="devices.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='devices' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-cpu-fill"></i><span>Devices</span>
-        </a>
-        <a href="settings.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='settings' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-sliders"></i><span>Settings</span>
-        </a>
-        <a href="docs.php" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all <?= $activePage==='docs' ? 'bg-[#6b2072]/10 text-[#6b2072]' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900' ?>">
-          <i class="bi bi-book-half"></i><span>Dokumentasi</span>
-        </a>
-      </div>
-
-      <!-- Realtime Clock -->
-      <div class="flex items-center gap-4">
-        <div class="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-          <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <!-- MOBILE BOTTOM NAVIGATION -->
-  <div class="fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-t border-slate-200/80 px-6 py-2 flex md:hidden justify-around items-center shadow-lg">
-    <a href="index.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='dashboard' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-grid-1x2-fill text-lg"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="devices.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='devices' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-cpu-fill text-lg"></i>
-      <span>Devices</span>
-    </a>
-    <a href="settings.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='settings' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-sliders text-lg"></i>
-      <span>Settings</span>
-    </a>
-    <a href="docs.php" class="flex flex-col items-center gap-0.5 text-[10px] font-bold transition-all <?= $activePage==='docs' ? 'text-[#6b2072]' : 'text-slate-500' ?>">
-      <i class="bi bi-book-half text-lg"></i>
-      <span>Dokumentasi</span>
-    </a>
-  </div>
-
-  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 relative">
-    
-    <!-- Hero / Title Header -->
-    <div class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm mb-8 relative overflow-hidden">
-      <div class="absolute -right-16 -top-16 w-40 h-40 bg-[#6b2072]/5 rounded-full blur-2xl"></div>
-      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-        <div>
-          <span class="text-[10px] font-black text-[#6b2072] uppercase tracking-widest bg-[#6b2072]/5 border border-[#6b2072]/10 px-3 py-1 rounded-full">Panduan Klinis</span>
-          <h1 class="text-3xl font-black text-slate-900 tracking-tight mt-3">Dokumentasi & Panduan Perawat</h1>
-          <p class="text-slate-500 text-sm mt-1">Panduan lengkap pengoperasian dan penanganan alarm pada Sistem Monitoring Infus Pintar (Smart Infus).</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <div class="w-12 h-12 bg-purple-50 text-[#6b2072] rounded-xl flex items-center justify-center text-xl border border-purple-100 shadow-sm">
-            <i class="bi bi-journal-medical"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      
-      <!-- Side Quick Links Menu (Sticky) -->
-      <div class="lg:sticky top-24 lg:col-span-1">
-        <div class="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm sticky top-24 flex flex-col gap-1">
-          <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">Daftar Isi</div>
-          
-          <a href="#about" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
-            <i class="bi bi-info-circle text-sm text-slate-400"></i>
-            <span>1. Tentang Sistem</span>
-          </a>
-          
-          <a href="#dashboard" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
-            <i class="bi bi-grid-1x2 text-sm text-slate-400"></i>
-            <span>2. Panduan Dashboard</span>
-          </a>
-          
-          <a href="#alarms" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
-            <i class="bi bi-bell text-sm text-slate-400"></i>
-            <span>3. Jenis & Arti Alarm</span>
-          </a>
-
-          <a href="#handling" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
-            <i class="bi bi-heart-pulse text-sm text-slate-400"></i>
-            <span>4. Respon Klinis Alarm</span>
-          </a>
-
-          <a href="#db-maintenance" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
-            <i class="bi bi-database text-sm text-slate-400"></i>
-            <span>5. Pemeliharaan Database</span>
-          </a>
-          
-          <a href="#faq" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
-            <i class="bi bi-question-circle text-sm text-slate-400"></i>
-            <span>6. Tanya Jawab (FAQ)</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- Main Documentation Content -->
-      <div class="lg:col-span-3 flex flex-col gap-8">
-        
-        <!-- Section 1: About -->
-        <section id="about" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+// ── DEFAULT DOKUMENTASI HTML ──────────────────────────
+$defaultDocs = [
+    'about' => '
           <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
             <div class="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center text-sm border border-blue-100">
               <i class="bi bi-info-circle-fill"></i>
@@ -159,10 +31,54 @@ $activePage = 'docs';
           <p class="text-slate-600 text-sm leading-relaxed mt-3">
             Sistem ini menggunakan modul sensor nirkabel (Wi-Fi) yang dipasang pada tiang infus pasien untuk mengirimkan data tetesan per menit (TPM), volume cairan sisa, serta status tombol panggilan darurat langsung ke stasiun perawat (Nurse Station) tanpa perlu mengecek ke kamar pasien secara konstan.
           </p>
-        </section>
 
-        <!-- Section 2: Dashboard -->
-        <section id="dashboard" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+          <!-- DESKRIPSI TOMBOL FISIK ALAT -->
+          <div class="mt-6 border border-slate-100 rounded-xl p-4 bg-slate-50/50">
+            <h3 class="font-bold text-slate-800 flex items-center gap-2 mb-3 text-xs uppercase tracking-wider">
+              <i class="bi bi-cpu text-[#6b2072]"></i>
+              Tombol Fisik pada Perangkat Infus
+            </h3>
+            <p class="text-xs text-slate-600 mb-4 leading-relaxed">
+              Pada perangkat keras (hardware) modul infus yang terpasang di tiang infus pasien, terdapat tiga tombol fisik utama yang dapat dioperasikan oleh perawat dan pasien:
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="flex items-start gap-3 bg-white p-3 rounded-lg border border-emerald-100 shadow-sm">
+                <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center flex-shrink-0 font-bold shadow-md shadow-emerald-500/20 text-xs">
+                  M
+                </div>
+                <div>
+                  <h4 class="font-bold text-slate-900 text-xs">Tombol Ganti Mode (Hijau)</h4>
+                  <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Tombol berwarna <strong class="text-emerald-600">HIJAU</strong> digunakan oleh perawat untuk mengubah mode tetesan cairan infus (misalnya mode dewasa/anak atau laju aliran) sesuai kebutuhan klinis pasien.
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3 bg-white p-3 rounded-lg border border-red-100 shadow-sm">
+                <div class="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0 font-bold shadow-md shadow-red-500/20 text-xs animate-pulse">
+                  N
+                </div>
+                <div>
+                  <h4 class="font-bold text-slate-900 text-xs">Tombol Nurse Call (Merah)</h4>
+                  <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Tombol berwarna <strong class="text-red-600">MERAH</strong> digunakan oleh pasien atau keluarga untuk memicu panggilan darurat ke stasiun perawat jika memerlukan bantuan klinis segera.
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start gap-3 bg-white p-3 rounded-lg border border-slate-300 shadow-sm">
+                <div class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center flex-shrink-0 font-bold shadow-md shadow-slate-800/20 text-xs">
+                  T
+                </div>
+                <div>
+                  <h4 class="font-bold text-slate-900 text-xs">Tombol Tare (Hitam)</h4>
+                  <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    Tombol berwarna <strong class="text-slate-800">HITAM</strong> digunakan perawat untuk menera ulang (<em>tare</em>) sensor timbangan ke titik nol. Tekan setelah kantong infus baru dipasang agar pembacaan berat dimulai dari nol. Buzzer berbunyi 2× sebagai konfirmasi.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+    ',
+    'dashboard' => '
           <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
             <div class="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center text-sm border border-indigo-100">
               <i class="bi bi-grid-1x2-fill"></i>
@@ -195,10 +111,8 @@ $activePage = 'docs';
               </ul>
             </div>
           </div>
-        </section>
-
-        <!-- Section 3: Alarms -->
-        <section id="alarms" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+    ',
+    'alarms' => '
           <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
             <div class="w-8 h-8 bg-red-50 text-red-600 rounded-lg flex items-center justify-center text-sm border border-red-100">
               <i class="bi bi-bell-fill"></i>
@@ -290,10 +204,8 @@ $activePage = 'docs';
             </div>
 
           </div>
-        </section>
-
-        <!-- Section 4: Response -->
-        <section id="handling" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+    ',
+    'handling' => '
           <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
             <div class="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center text-sm border border-emerald-100">
               <i class="bi bi-heart-pulse-fill"></i>
@@ -337,10 +249,8 @@ $activePage = 'docs';
             </div>
 
           </div>
-        </section>
-
-        <!-- Section 5: Database Maintenance -->
-        <section id="db-maintenance" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+    ',
+    'maintenance' => '
           <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
             <div class="w-8 h-8 bg-purple-50 text-[#6b2072] rounded-lg flex items-center justify-center text-sm border border-purple-100">
               <i class="bi bi-database-fill-gear"></i>
@@ -372,10 +282,8 @@ $activePage = 'docs';
               </p>
             </div>
           </div>
-        </section>
-
-        <!-- Section 6: FAQ -->
-        <section id="faq" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm mb-6">
+    ',
+    'faq' => '
           <div class="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
             <div class="w-8 h-8 bg-purple-50 text-purple-600 rounded-lg flex items-center justify-center text-sm border border-purple-100">
               <i class="bi bi-question-circle-fill"></i>
@@ -417,11 +325,337 @@ $activePage = 'docs';
             </div>
 
           </div>
-        </section>
+    '
+];
 
+// ── SAVE ACTION (POST) ───────────────────────────────
+$successMsg = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_GET['action']) && $_GET['action'] === 'save_docs') {
+    if ($_isSuperAdmin) {
+        $keys = [
+            'about'       => 'docs_sec_about',
+            'dashboard'   => 'docs_sec_dashboard',
+            'alarms'      => 'docs_sec_alarms',
+            'handling'    => 'docs_sec_handling',
+            'maintenance' => 'docs_sec_maintenance',
+            'faq'         => 'docs_sec_faq'
+        ];
+        foreach ($keys as $arrKey => $dbKey) {
+            if (isset($_POST[$dbKey])) {
+                setSetting($dbKey, trim($_POST[$dbKey]));
+            }
+        }
+        header('Location: docs.php?saved=1');
+        exit;
+    } else {
+        header('Location: docs.php?error=unauthorized');
+        exit;
+    }
+}
+
+if (isset($_GET['saved'])) {
+    $successMsg = 'Perubahan dokumentasi berhasil disimpan ke database!';
+}
+
+// ── LOAD FINAL CONTENT FROM DB/FALLBACK ────────────────
+$secAbout       = getSetting('docs_sec_about', '');
+$secDashboard   = getSetting('docs_sec_dashboard', '');
+$secAlarms      = getSetting('docs_sec_alarms', '');
+$secHandling    = getSetting('docs_sec_handling', '');
+$secMaintenance = getSetting('docs_sec_maintenance', '');
+$secFaq         = getSetting('docs_sec_faq', '');
+
+if (empty($secAbout))       $secAbout       = $defaultDocs['about'];
+if (empty($secDashboard))   $secDashboard   = $defaultDocs['dashboard'];
+if (empty($secAlarms))      $secAlarms      = $defaultDocs['alarms'];
+if (empty($secHandling))    $secHandling    = $defaultDocs['handling'];
+if (empty($secMaintenance)) $secMaintenance = $defaultDocs['maintenance'];
+if (empty($secFaq))         $secFaq         = $defaultDocs['faq'];
+
+$isEditMode = isset($_GET['edit']) && $_GET['edit'] === '1' && $_isSuperAdmin;
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dokumentasi Perawat — Smart Infus</title>
+  
+  <!-- Local Tailwind CSS -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+  
+  <!-- Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] font-sans antialiased">
+
+  <?php require __DIR__ . '/config/navbar.php'; ?>
+
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1 relative">
+    
+    <!-- Toast Alert Success -->
+    <?php if ($successMsg): ?>
+      <div id="save-toast-banner" class="mb-6 flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold shadow-sm transition-all duration-300">
+        <div class="flex items-center gap-2.5">
+          <div class="w-6 h-6 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xs shadow-sm shadow-emerald-500/10">
+            <i class="bi bi-check2-circle text-sm"></i>
+          </div>
+          <span><?= htmlspecialchars($successMsg) ?></span>
+        </div>
+        <button onclick="document.getElementById('save-toast-banner').remove()" class="text-emerald-400 hover:text-emerald-600 transition-colors">
+          <i class="bi bi-x-lg text-sm"></i>
+        </button>
+      </div>
+      <script>
+        setTimeout(() => {
+          const banner = document.getElementById('save-toast-banner');
+          if (banner) {
+            banner.style.opacity = '0';
+            banner.style.transform = 'translateY(-10px)';
+            setTimeout(() => banner.remove(), 300);
+          }
+        }, 8000);
+      </script>
+    <?php endif; ?>
+
+    <!-- Hero / Title Header -->
+    <div class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm mb-8 relative overflow-hidden">
+      <div class="absolute -right-16 -top-16 w-40 h-40 bg-[#6b2072]/5 rounded-full blur-2xl"></div>
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+        <div>
+          <span class="text-[10px] font-black text-[#6b2072] uppercase tracking-widest bg-[#6b2072]/5 border border-[#6b2072]/10 px-3 py-1 rounded-full">Panduan Klinis</span>
+          <h1 class="text-3xl font-black text-slate-900 tracking-tight mt-3">Dokumentasi & Panduan Perawat</h1>
+          <p class="text-slate-500 text-sm mt-1">Panduan lengkap pengoperasian dan penanganan alarm pada Sistem Monitoring Infus Pintar (Smart Infus).</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <?php if ($_isSuperAdmin && !$isEditMode): ?>
+            <a href="docs.php?edit=1" class="px-4 py-2.5 bg-[#6b2072] hover:bg-[#541859] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#6b2072]/15 flex items-center gap-1.5">
+              <i class="bi bi-pencil-square"></i> Edit Dokumentasi
+            </a>
+          <?php endif; ?>
+          <div class="w-12 h-12 bg-purple-50 text-[#6b2072] rounded-xl flex items-center justify-center text-xl border border-purple-100 shadow-sm flex-shrink-0">
+            <i class="bi bi-journal-medical"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <?php if ($isEditMode): ?>
+      <!-- ═══════════════════════════════════════════════════
+           EDIT MODE PANEL (SUPERADMIN ONLY)
+           ═══════════════════════════════════════════════════ -->
+      <div class="bg-white border border-slate-200/60 rounded-2xl p-6 shadow-sm mb-8 relative">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+          <div>
+            <h2 class="text-lg font-black text-slate-900 tracking-tight uppercase">Mode Editor Dokumentasi</h2>
+            <p class="text-xs text-slate-500 mt-1">Ubah atau sesuaikan konten setiap halaman panduan menggunakan tag HTML & kelas Tailwind CSS.</p>
+          </div>
+          <a href="docs.php" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 flex items-center gap-1.5">
+            <i class="bi bi-arrow-left-short text-base"></i> Batal / Kembali
+          </a>
+        </div>
+
+        <form method="POST" action="docs.php?action=save_docs" class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <!-- Left Column Tabs -->
+          <div class="lg:col-span-1 flex flex-col gap-1.5" id="editor-tabs">
+            <div class="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 mb-1">Daftar Bagian</div>
+            
+            <button type="button" onclick="switchEditorTab('about')" id="tab-btn-about" class="editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left bg-purple-50 text-[#6b2072] border border-purple-100">
+              <span class="truncate">1. Tentang Sistem</span>
+              <i class="bi bi-chevron-right text-xs"></i>
+            </button>
+            <button type="button" onclick="switchEditorTab('dashboard')" id="tab-btn-dashboard" class="editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left text-slate-600 hover:bg-slate-50">
+              <span class="truncate">2. Panduan Dashboard</span>
+              <i class="bi bi-chevron-right text-xs"></i>
+            </button>
+            <button type="button" onclick="switchEditorTab('alarms')" id="tab-btn-alarms" class="editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left text-slate-600 hover:bg-slate-50">
+              <span class="truncate">3. Jenis & Arti Alarm</span>
+              <i class="bi bi-chevron-right text-xs"></i>
+            </button>
+            <button type="button" onclick="switchEditorTab('handling')" id="tab-btn-handling" class="editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left text-slate-600 hover:bg-slate-50">
+              <span class="truncate">4. Respon Klinis Alarm</span>
+              <i class="bi bi-chevron-right text-xs"></i>
+            </button>
+            <button type="button" onclick="switchEditorTab('maintenance')" id="tab-btn-maintenance" class="editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left text-slate-600 hover:bg-slate-50">
+              <span class="truncate">5. Pemeliharaan DB</span>
+              <i class="bi bi-chevron-right text-xs"></i>
+            </button>
+            <button type="button" onclick="switchEditorTab('faq')" id="tab-btn-faq" class="editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left text-slate-600 hover:bg-slate-50">
+              <span class="truncate">6. Tanya Jawab (FAQ)</span>
+              <i class="bi bi-chevron-right text-xs"></i>
+            </button>
+
+            <div class="mt-6 p-4 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-500 leading-relaxed">
+              <span class="font-bold text-slate-800 block mb-1">💡 Tips Pemulihan:</span>
+              Kosongkan kotak teks pada bagian tertentu lalu klik simpan untuk memulihkan ke konten default bawaan Smart Infus.
+            </div>
+          </div>
+
+          <!-- Right Column Fields -->
+          <div class="lg:col-span-3 flex flex-col gap-6">
+            
+            <!-- Helper Editor Tab View -->
+            <?php
+            function _editorField(string $key, string $label, string $currentValue) {
+                // Determine visibility class
+                $vis = ($key === 'about') ? '' : 'hidden';
+                return "
+                <div id=\"tab-content-{$key}\" class=\"editor-tab-content {$vis} flex flex-col gap-4\">
+                  <div>
+                    <h3 class=\"text-sm font-black text-slate-900 tracking-wide\">Konten HTML: {$label}</h3>
+                    <p class=\"text-[11px] text-slate-400 mt-0.5\">Format HTML & kelas CSS diperbolehkan. Gunakan visualisasi yang konsisten.</p>
+                  </div>
+                  <textarea
+                    id=\"textarea-{$key}\"
+                    name=\"docs_sec_{$key}\"
+                    class=\"font-mono text-xs w-full h-[320px] p-4 bg-slate-900 text-slate-100 rounded-xl outline-none focus:ring-4 focus:ring-purple-900/15 focus:border-[#6b2072] border border-slate-700 transition-all\"
+                    placeholder=\"Kosongkan untuk menggunakan konten default bawaan...\"
+                  >" . htmlspecialchars($currentValue) . "</textarea>
+                  
+                  <!-- LIVE PREVIEW CONTAINER -->
+                  <div class=\"border-t border-slate-100 pt-4 mt-2\">
+                    <h4 class=\"text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest flex items-center gap-1.5\">
+                      <i class=\"bi bi-eye-fill text-[#6b2072]\"></i> Pratinjau Tampilan (Live Preview)
+                    </h4>
+                    <div id=\"preview-{$key}\" class=\"bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm overflow-hidden text-slate-800\">
+                      {$currentValue}
+                    </div>
+                  </div>
+                </div>
+                ";
+            }
+            ?>
+
+            <?= _editorField('about',       '1. Tentang Sistem',        $secAbout) ?>
+            <?= _editorField('dashboard',   '2. Panduan Dashboard',    $secDashboard) ?>
+            <?= _editorField('alarms',      '3. Jenis & Arti Alarm',    $secAlarms) ?>
+            <?= _editorField('handling',    '4. Respon Klinis Alarm',   $secHandling) ?>
+            <?= _editorField('maintenance', '5. Pemeliharaan DB',       $secMaintenance) ?>
+            <?= _editorField('faq',         '6. Tanya Jawab (FAQ)',     $secFaq) ?>
+
+            <div class="flex items-center gap-3 border-t border-slate-100 pt-6">
+              <button type="submit" class="px-5 py-2.5 bg-[#6b2072] hover:bg-[#541859] text-white rounded-xl text-xs font-bold shadow-md shadow-[#6b2072]/15 transition-all">
+                <i class="bi bi-check-circle mr-1"></i> SIMPAN PERUBAHAN
+              </button>
+              <a href="docs.php" class="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200">
+                BATAL
+              </a>
+            </div>
+
+          </div>
+        </form>
       </div>
 
-    </div>
+      <script>
+        function switchEditorTab(tabId) {
+          // Hide all contents
+          document.querySelectorAll('.editor-tab-content').forEach(el => el.classList.add('hidden'));
+          // Show active content
+          document.getElementById('tab-content-' + tabId).classList.remove('hidden');
+
+          // Reset all tab button styles
+          document.querySelectorAll('.editor-tab-btn').forEach(btn => {
+            btn.className = 'editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left text-slate-600 hover:bg-slate-50';
+          });
+          // Highlight active button
+          const activeBtn = document.getElementById('tab-btn-' + tabId);
+          activeBtn.className = 'editor-tab-btn flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-left bg-purple-50 text-[#6b2072] border border-purple-100';
+        }
+
+        // Live Preview updates
+        const docKeys = ['about', 'dashboard', 'alarms', 'handling', 'maintenance', 'faq'];
+        docKeys.forEach(key => {
+          const textarea = document.getElementById('textarea-' + key);
+          const preview = document.getElementById('preview-' + key);
+          textarea.addEventListener('input', () => {
+            preview.innerHTML = textarea.value;
+          });
+        });
+      </script>
+
+    <?php else: ?>
+      <!-- ═══════════════════════════════════════════════════
+           PUBLIC DOCUMENTATION VIEW
+           ═══════════════════════════════════════════════════ -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+
+        <!-- Main Documentation Content -->
+        <div class="lg:col-span-3 flex flex-col gap-8">
+          
+          <!-- Section 1: About -->
+          <section id="about" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <?= $secAbout ?>
+          </section>
+
+          <!-- Section 2: Dashboard -->
+          <section id="dashboard" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <?= $secDashboard ?>
+          </section>
+
+          <!-- Section 3: Alarms -->
+          <section id="alarms" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <?= $secAlarms ?>
+          </section>
+
+          <!-- Section 4: Response -->
+          <section id="handling" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <?= $secHandling ?>
+          </section>
+
+          <!-- Section 5: Database Maintenance -->
+          <section id="db-maintenance" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm">
+            <?= $secMaintenance ?>
+          </section>
+
+          <!-- Section 6: FAQ -->
+          <section id="faq" class="bg-white border border-slate-200/60 rounded-2xl p-6 sm:p-8 shadow-sm mb-6">
+            <?= $secFaq ?>
+          </section>
+
+        </div>
+
+        <!-- Side Quick Links Menu (Sticky) — kanan -->
+        <div class="lg:col-span-1 order-first lg:order-last">
+          <div class="bg-white border border-slate-200/60 rounded-2xl p-4 shadow-sm lg:sticky lg:top-24 flex flex-col gap-1">
+            <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-2">Daftar Isi</div>
+            
+            <a href="#about" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
+              <i class="bi bi-info-circle text-sm text-slate-400"></i>
+              <span>1. Tentang Sistem</span>
+            </a>
+            
+            <a href="#dashboard" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
+              <i class="bi bi-grid-1x2 text-sm text-slate-400"></i>
+              <span>2. Panduan Dashboard</span>
+            </a>
+            
+            <a href="#alarms" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
+              <i class="bi bi-bell text-sm text-slate-400"></i>
+              <span>3. Jenis & Arti Alarm</span>
+            </a>
+
+            <a href="#handling" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
+              <i class="bi bi-heart-pulse text-sm text-slate-400"></i>
+              <span>4. Respon Klinis Alarm</span>
+            </a>
+
+            <a href="#db-maintenance" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
+              <i class="bi bi-database text-sm text-slate-400"></i>
+              <span>5. Pemeliharaan Database</span>
+            </a>
+            
+            <a href="#faq" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-[#6b2072] transition-all">
+              <i class="bi bi-question-circle text-sm text-slate-400"></i>
+              <span>6. Tanya Jawab (FAQ)</span>
+            </a>
+          </div>
+        </div>
+
+      </div>
+    <?php endif; ?>
 
   </main>
 
@@ -430,17 +664,5 @@ $activePage = 'docs';
     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
 
-  <script>
-    function updateClock() {
-      const now = new Date();
-      const h = String(now.getHours()).padStart(2,'0');
-      const m = String(now.getMinutes()).padStart(2,'0');
-      const s = String(now.getSeconds()).padStart(2,'0');
-      const el = document.getElementById('clockText');
-      if (el) el.textContent = h + ':' + m + ':' + s;
-    }
-    updateClock();
-    setInterval(updateClock, 1000);
-  </script>
 </body>
 </html>

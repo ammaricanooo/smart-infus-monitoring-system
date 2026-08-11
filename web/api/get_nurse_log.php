@@ -10,6 +10,14 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 header('Pragma: no-cache');
 
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/auth.php';
+
+// Proteksi session jika halaman dashboard membutuhkan login
+if (pageNeedsLogin('dashboard') && !isLoggedIn()) {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized: Silakan login terlebih dahulu']);
+    exit;
+}
 
 $db    = getDB();
 $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;

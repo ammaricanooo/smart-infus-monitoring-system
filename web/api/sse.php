@@ -25,6 +25,14 @@ header('Connection: keep-alive');
 header('Access-Control-Allow-Origin: *');
 
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/auth.php';
+
+// Proteksi session jika halaman dashboard membutuhkan login
+if (pageNeedsLogin('dashboard') && !isLoggedIn()) {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Unauthorized: Silakan login terlebih dahulu']);
+    exit;
+}
 
 // ── Helper: kirim satu SSE event ─────────────────────
 function sseEvent(string $event, mixed $data): void
