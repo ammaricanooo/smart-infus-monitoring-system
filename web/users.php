@@ -327,11 +327,11 @@ $activePage = 'users';
                     </a>
                     <!-- Nonaktifkan (soft delete) -->
                     <?php if (!$isMe): ?>
-                    <form method="POST" action="users.php" class="inline"
-                          onsubmit="return confirm('Nonaktifkan user <?= esc(addslashes($u['nama'])) ?>?')">
+                    <form method="POST" action="users.php" class="inline" id="form-deact-<?= (int)$u['id'] ?>">
                       <input type="hidden" name="action" value="deactivate" />
                       <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>" />
-                      <button type="submit" title="Nonaktifkan"
+                      <button type="button" title="Nonaktifkan"
+                              onclick="confirmAction({icon:'person-x-fill',iconBg:'#fee2e2',iconColor:'#dc2626',title:'Nonaktifkan User',sub:'<?= esc(addslashes($u['nama'])) ?>',body:'<p>User <strong><?= esc(addslashes($u['nama'])) ?></strong> akan dinonaktifkan dan tidak bisa login.<br><br>Akun tidak dihapus — bisa diaktifkan kembali.</p>',confirmLabel:'<i class=\'bi bi-person-x-fill\'></i> Ya, Nonaktifkan',confirmStyle:'background:#dc2626;color:#fff;',formId:'form-deact-<?= (int)$u['id'] ?>'})"
                               class="w-8 h-8 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-500 hover:text-white rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-90">
                         <i class="bi bi-person-x-fill text-[11px]"></i>
                       </button>

@@ -805,11 +805,10 @@ function handleSseUpdate(payload) {
   const { devices, nurse_log } = payload;
 
   if (Array.isArray(devices)) {
-
     latestDevices = devices;
-
     devices.forEach(dev => updateCard(dev));
     updateTopStats(latestDevices);
+    updateSchedule(latestDevices);
   }
 
   if (Array.isArray(nurse_log)) {
@@ -875,11 +874,10 @@ async function fallbackPollingCycle() {
     const devJson = await devRes.json();
     const logJson = await logRes.json();
     if (devJson.status === 'ok') {
-
       latestDevices = devJson.data;
-
       devJson.data.forEach(dev => updateCard(dev));
       updateTopStats(latestDevices);
+      updateSchedule(latestDevices);
     }
     if (logJson.status === 'ok') renderNurseLog(logJson.data);
   } catch (e) {
@@ -975,3 +973,127 @@ if (window.speechSynthesis) {
 }
 document.addEventListener('click', () => getAudioCtx(), { once: true });
 document.addEventListener('touchstart', () => getAudioCtx(), { once: true });
+
+// =====================================================
+// ===== JADWAL PENGGANTIAN INFUS ======================
+// =====================================================
+
+function updateSchedule(allData) {
+  const tbody   = document.getElementById('sched-tbody');
+  const countEl = document.getElementById('sched-count');
+  if (!tbody) return;
+
+  // Filter: online & volume > 0
+  const active = allData.filter(dev => {
+    const online = (dev.is_online !== undefined)
+      ? Boolean(dev.is_online)
+      : isOnline(dev.created_at);
+    return online && parseFloat(dev.persen ?? 0) > 0;
+  });
+
+  if (countEl) countEl.textContent = active.length + ' device aktif';
+
+  if (active.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:48px 0;text-align:center;font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">
+      <i class="bi bi-clock" style="font-size:2rem;display:block;color:#cbd5e1;margin-bottom:8px;"></i>
+      Belum ada device online dengan cairan aktif
+    </td></tr>`;
+    return;
+  }
+
+  // Sort: estimasi total menit terkecil di atas
+  active.sort((a, b) => {
+    const mA = (parseInt(a.estimasi_jam ?? 0) * 60) + parseInt(a.estimasi_mnt ?? 0);
+    const mB = (parseInt(b.estimasi_jam ?? 0) * 60) + parseInt(b.estimasi_mnt ?? 0);
+    return mA - mB;
+  });
+
+  const pad = n => String(n).padStart(2, '0');
+
+  tbody.innerHTML = active.map((dev, i) => {
+    const estJam = parseInt(dev.estimasi_jam ?? 0);
+    const estMnt = parseInt(dev.estimasi_mnt ?? 0);
+    const total  = estJam * 60 + estMnt;
+    const persen = parseFloat(dev.persen ?? 0);
+    const vol    = parseFloat(dev.volume_sisa ?? 0);
+
+    // Target waktu penggantian
+    const targetDate = new Date(Date.now() + total * 60 * 1000);
+    const targetStr  = `${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}`;
+    const today      = new Date();
+    const isToday    = targetDate.getDate()    === today.getDate()
+                    && targetDate.getMonth()   === today.getMonth()
+                    && targetDate.getFullYear()=== today.getFullYear();
+    const targetDay  = isToday ? ''
+      : `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">${pad(targetDate.getDate())}/${pad(targetDate.getMonth()+1)}</span>`;
+
+    // Urgensi
+    let urgBg, urgBorder, urgText, urgBadgeBg, urgBadgeText, urgLabel, urgIcon;
+    if (total <= 15) {
+      urgBg = '#fef2f2'; urgBorder = '#fca5a5'; urgText = '#dc2626';
+      urgBadgeBg = '#fee2e2'; urgBadgeText = '#b91c1c';
+      urgLabel = 'SEGERA'; urgIcon = 'exclamation-triangle-fill';
+    } else if (total <= 45) {
+      urgBg = '#fffbeb'; urgBorder = '#fcd34d'; urgText = '#d97706';
+      urgBadgeBg = '#fef3c7'; urgBadgeText = '#92400e';
+      urgLabel = 'SIAPKAN'; urgIcon = 'clock-fill';
+    } else {
+      urgBg = '#fff'; urgBorder = '#e2e8f0'; urgText = '#64748b';
+      urgBadgeBg = '#f0fdf4'; urgBadgeText = '#166534';
+      urgLabel = 'NORMAL'; urgIcon = 'check-circle-fill';
+    }
+
+    const bottleColor = persen > 30 ? '#06b6d4' : (persen > 20 ? '#f59e0b' : '#ef4444');
+    const estDisplay  = (estJam > 0 ? estJam + 'j ' : '') + estMnt + 'm';
+
+    return `
+      <tr id="sched-row-${escHtml(dev.device_id)}"
+          style="background:${urgBg};border-left:3px solid ${urgBorder};transition:background .3s;">
+        <td style="padding:12px 20px;">
+          <span style="font-size:12px;font-weight:900;color:#64748b;">${i + 1}</span>
+        </td>
+        <td style="padding:12px 20px;">
+          <div style="font-size:13px;font-weight:700;color:#0f172a;">${escHtml(dev.pasien || '—')}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:2px;display:flex;align-items:center;gap:4px;">
+            <i class="bi bi-geo-alt" style="font-size:10px;color:#94a3b8;"></i>${escHtml(dev.lokasi || '—')}
+            <span style="color:#cbd5e1;margin:0 2px;">·</span>
+            <span style="font-family:monospace;color:#94a3b8;font-size:10px;">${escHtml(dev.device_id)}</span>
+          </div>
+        </td>
+        <td style="padding:12px 20px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:14px;height:28px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:3px 3px 6px 6px;position:relative;overflow:hidden;flex-shrink:0;">
+              <div style="position:absolute;bottom:0;left:0;right:0;height:${Math.min(100,persen)}%;background:${bottleColor};transition:height .5s;"></div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:900;color:#0f172a;font-variant-numeric:tabular-nums;">
+                ${Math.round(vol)} <span style="font-size:11px;font-weight:500;color:#94a3b8;">ml</span>
+              </div>
+              <div style="font-size:10px;font-weight:700;color:${urgText};">${persen.toFixed(0)}%</div>
+            </div>
+          </div>
+        </td>
+        <td style="padding:12px 20px;">
+          <div style="font-size:13px;font-weight:900;color:#0f172a;font-variant-numeric:tabular-nums;">${estDisplay}</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">dari sekarang</div>
+        </td>
+        <td style="padding:12px 20px;">
+          <div style="font-size:13px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">
+            ${targetStr}${targetDay}
+          </div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">estimasi habis</div>
+        </td>
+        <td style="padding:12px 20px;">
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.04em;background:${urgBadgeBg};color:${urgBadgeText};">
+            <i class="bi bi-${urgIcon}" style="font-size:9px;"></i> ${urgLabel}
+          </span>
+        </td>
+        <td style="padding:12px 20px;text-align:right;">
+          <a href="detail.php?id=${encodeURIComponent(dev.device_id)}"
+             style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;font-size:11px;font-weight:700;background:#0f172a;color:#fff;text-decoration:none;">
+            <i class="bi bi-bar-chart-fill"></i> Detail
+          </a>
+        </td>
+      </tr>`;
+  }).join('');
+}

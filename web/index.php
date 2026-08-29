@@ -312,7 +312,7 @@ $activePage = 'dashboard';
     }
   </script>
 
-  <?php $showSseIndicator = true; require __DIR__ . '/config/navbar.php'; ?>
+  <?php require __DIR__ . '/config/navbar.php'; ?>
 
   <!-- MAIN DASHBOARD CONTENT -->
   <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex-1">
@@ -530,12 +530,194 @@ $activePage = 'dashboard';
       <?php endforeach; ?>
     </div>
 
+    <!-- JADWAL PENGGANTIAN INFUS -->
+    <div class="mt-10">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span class="w-1.5 h-4 bg-purple-500 rounded-full inline-block"></span>
+            Jadwal Penggantian Infus
+          </h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">Diurutkan dari yang paling cepat habis — hanya device aktif & online</p>
+        </div>
+        <span id="sched-count" class="text-[10px] font-black bg-purple-50 border border-purple-100 text-purple-600 px-2.5 py-1 rounded-full">
+          <?php
+            $onlineDevs = array_filter($devices, fn($d) =>
+              $d['last_update'] && (strtotime($d['last_update']) >= time() - 30) &&
+              ($d['persen'] !== null) && $d['persen'] > 0
+            );
+            echo count($onlineDevs) . ' device aktif';
+          ?>
+        </span>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                <th class="py-3 px-5">#</th>
+                <th class="py-3 px-5">Pasien &amp; Lokasi</th>
+                <th class="py-3 px-5">Sisa Cairan</th>
+                <th class="py-3 px-5">Estimasi Habis</th>
+                <th class="py-3 px-5">Target Waktu</th>
+                <th class="py-3 px-5">Status</th>
+                <th class="py-3 px-5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="sched-tbody" class="divide-y divide-slate-100 text-sm">
+              <?php
+                // Ambil hanya device online dengan volume > 0, sort by estimasi menit total
+                $schedDevs = array_filter($devices, fn($d) =>
+                  $d['last_update'] && (strtotime($d['last_update']) >= time() - 30) &&
+                  ($d['persen'] !== null) && $d['persen'] > 0
+                );
+                usort($schedDevs, function($a, $b) {
+                  $mA = (int)($a['estimasi_jam'] ?? 0) * 60 + (int)($a['estimasi_mnt'] ?? 0);
+                  $mB = (int)($b['estimasi_jam'] ?? 0) * 60 + (int)($b['estimasi_mnt'] ?? 0);
+                  return $mA <=> $mB;
+                });
+
+                if (empty($schedDevs)):
+              ?>
+              <tr>
+                <td colspan="7" class="py-12 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  <i class="bi bi-clock text-3xl block text-slate-300 mb-2"></i>
+                  Belum ada device online dengan cairan aktif
+                </td>
+              </tr>
+              <?php else:
+                foreach ($schedDevs as $i => $dev):
+                  $estJam  = (int)($dev['estimasi_jam'] ?? 0);
+                  $estMnt  = (int)($dev['estimasi_mnt'] ?? 0);
+                  $totalMnt = $estJam * 60 + $estMnt;
+                  $persen  = (float)($dev['persen'] ?? 0);
+                  $vol     = (float)($dev['volume_sisa'] ?? 0);
+                  $volAwal = (float)($dev['volume_awal'] ?? 500);
+
+                  // Hitung target waktu penggantian
+                  $targetTs  = time() + $totalMnt * 60;
+                  $targetStr = date('H:i', $targetTs);
+                  $targetDay = date('d/m', $targetTs);
+                  $todayDay  = date('d/m');
+
+                  // Kategori urgensi
+                  if ($totalMnt <= 15) {
+                    $urgency = 'critical';  // merah — harus segera
+                  } elseif ($totalMnt <= 45) {
+                    $urgency = 'warning';   // kuning — siapkan
+                  } else {
+                    $urgency = 'normal';    // hijau — aman
+                  }
+
+                  $urgencyStyle = match($urgency) {
+                    'critical' => ['bg' => '#fef2f2', 'border' => '#fca5a5', 'text' => '#dc2626', 'badge_bg' => '#fee2e2', 'badge_text' => '#b91c1c', 'label' => 'SEGERA'],
+                    'warning'  => ['bg' => '#fffbeb', 'border' => '#fcd34d', 'text' => '#d97706', 'badge_bg' => '#fef3c7', 'badge_text' => '#92400e', 'label' => 'SIAPKAN'],
+                    default    => ['bg' => '#fff',    'border' => '#e2e8f0', 'text' => '#64748b', 'badge_bg' => '#f0fdf4', 'badge_text' => '#166534', 'label' => 'NORMAL'],
+                  };
+              ?>
+              <tr id="sched-row-<?= htmlspecialchars($dev['device_id']) ?>"
+                  style="background:<?= $urgencyStyle['bg'] ?>;border-left:3px solid <?= $urgencyStyle['border'] ?>;"
+                  class="transition-colors">
+
+                <!-- Nomor urut -->
+                <td class="py-3.5 px-5">
+                  <span class="text-xs font-black text-slate-500"><?= $i + 1 ?></span>
+                </td>
+
+                <!-- Pasien & Lokasi -->
+                <td class="py-3.5 px-5">
+                  <div class="font-bold text-slate-900 text-sm"><?= htmlspecialchars($dev['pasien'] ?: '—') ?></div>
+                  <div class="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                    <i class="bi bi-geo-alt text-slate-400"></i><?= htmlspecialchars($dev['lokasi'] ?: '—') ?>
+                    <span class="text-slate-300 mx-1">·</span>
+                    <span class="font-mono text-slate-400"><?= htmlspecialchars($dev['device_id']) ?></span>
+                  </div>
+                </td>
+
+                <!-- Sisa Cairan -->
+                <td class="py-3.5 px-5">
+                  <div class="flex items-center gap-2">
+                    <!-- Mini bottle -->
+                    <div class="w-4 h-8 bg-slate-100 border border-slate-200 rounded-t rounded-b-lg relative overflow-hidden flex-shrink-0">
+                      <div style="position:absolute;bottom:0;left:0;right:0;height:<?= min(100,$persen) ?>%;background:<?= $persen > 30 ? '#06b6d4' : ($persen > 20 ? '#f59e0b' : '#ef4444') ?>;transition:height .5s;"></div>
+                    </div>
+                    <div>
+                      <div class="text-sm font-black text-slate-900 tabular-nums"><?= number_format($vol, 0) ?> <span class="text-xs font-medium text-slate-400">ml</span></div>
+                      <div class="text-[10px] font-bold" style="color:<?= $urgencyStyle['text'] ?>;"><?= number_format($persen, 0) ?>%</div>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Estimasi Habis -->
+                <td class="py-3.5 px-5">
+                  <div class="text-sm font-black text-slate-900 tabular-nums" data-sched-est="<?= htmlspecialchars($dev['device_id']) ?>">
+                    <?= $estJam > 0 ? $estJam . 'j ' : '' ?><?= $estMnt ?>m
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">dari sekarang</div>
+                </td>
+
+                <!-- Target Waktu -->
+                <td class="py-3.5 px-5">
+                  <div class="text-sm font-bold text-slate-900 tabular-nums" data-sched-target="<?= htmlspecialchars($dev['device_id']) ?>">
+                    <?= $targetStr ?>
+                    <?php if ($targetDay !== $todayDay): ?>
+                      <span class="text-[10px] text-slate-400 ml-1"><?= $targetDay ?></span>
+                    <?php endif; ?>
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">estimasi habis</div>
+                </td>
+
+                <!-- Status Badge -->
+                <td class="py-3.5 px-5">
+                  <span data-sched-badge="<?= htmlspecialchars($dev['device_id']) ?>"
+                        style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.04em;background:<?= $urgencyStyle['badge_bg'] ?>;color:<?= $urgencyStyle['badge_text'] ?>;">
+                    <?php if ($urgency === 'critical'): ?>
+                      <i class="bi bi-exclamation-triangle-fill" style="font-size:9px;"></i>
+                    <?php elseif ($urgency === 'warning'): ?>
+                      <i class="bi bi-clock-fill" style="font-size:9px;"></i>
+                    <?php else: ?>
+                      <i class="bi bi-check-circle-fill" style="font-size:9px;"></i>
+                    <?php endif; ?>
+                    <?= $urgencyStyle['label'] ?>
+                  </span>
+                </td>
+
+                <!-- Aksi -->
+                <td class="py-3.5 px-5 text-right">
+                  <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>"
+                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
+                     style="background:#0f172a;color:#fff;">
+                    <i class="bi bi-bar-chart-fill"></i> Detail
+                  </a>
+                </td>
+              </tr>
+              <?php endforeach; endif; ?>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Legend -->
+        <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
+          <span class="flex items-center gap-1.5">
+            <span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;"></span> ≤ 15 menit — Segera ganti
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span style="width:10px;height:10px;border-radius:50%;background:#d97706;display:inline-block;"></span> 16–45 menit — Siapkan kantong baru
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block;"></span> &gt; 45 menit — Normal
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- NURSE CALL ARCHIVE CHRONOLOGY LOGS -->
     <div class="mt-12">
       <div class="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
         <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
           <span class="w-1.5 h-4 bg-red-500 rounded-full inline-block"></span>
-          Kronologi Panggilan Darurat (Nurse Call)
+          Riwayat Panggilan Darurat (Nurse Call)
           <span id="nurse-log-count" class="text-xs bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold ml-1"><?= count($nurseLogs) ?></span>
         </h2>
         <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 flex items-center gap-1 tracking-wider">

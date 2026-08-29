@@ -204,3 +204,21 @@ INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
 --   WHERE `key_name` = 'wa_provider'
 --     AND EXISTS (SELECT 1 FROM (SELECT key_value FROM settings WHERE key_name = 'fonnte_token') t WHERE t.key_value != '')
 --     AND NOT EXISTS (SELECT 1 FROM (SELECT key_value FROM settings WHERE key_name = 'wa_api_url') t WHERE t.key_value != '');
+
+-- =====================================================
+-- MIGRATION: family_token + new settings (v3)
+-- Tambah kolom family_token ke devices (link monitor keluarga)
+-- =====================================================
+
+-- Tambah kolom family_token jika belum ada:
+-- ALTER TABLE `devices`
+--   ADD COLUMN `family_token` VARCHAR(64) NOT NULL DEFAULT '' AFTER `no_keluarga`;
+
+-- Generate token unik untuk semua device yang ada:
+-- UPDATE devices SET family_token = LOWER(REPLACE(UUID(), '-', '')) WHERE family_token = '';
+
+-- Settings baru (v3)
+INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
+  ('wa_resolved_msg_suster',  'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\n{resolved_label}. Tidak perlu menuju ruangan.'),
+  ('wa_welcome_keluarga',     'Halo! 👋\nAnda terdaftar sebagai kontak keluarga untuk pasien *{pasien}* di *{lokasi}*.\n\nAnda bisa memantau kondisi infus secara langsung melalui tautan berikut:\n{monitor_url}\n\n_Tautan ini khusus untuk Anda. Jangan bagikan ke orang lain._'),
+  ('app_url',                 '');

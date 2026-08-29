@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         setSetting('wa_provider', $provider);
 
         // Simpan konfigurasi kedua provider sekaligus
-        foreach (['wa_api_url', 'wa_api_key', 'fonnte_token', 'iot_api_key'] as $f) {
+        foreach (['wa_api_url', 'wa_api_key', 'fonnte_token', 'iot_api_key', 'app_url'] as $f) {
             if (isset($_POST[$f])) setSetting($f, trim($_POST[$f]));
         }
         setSetting('login_required', isset($_POST['login_required']) ? '1' : '0');
@@ -64,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'wa_low_volume_msg_suster', 'wa_low_volume_msg_keluarga',
             'wa_tpm_zero_msg_suster',   'wa_tpm_zero_msg_keluarga',
             'wa_tpm_high_msg_suster',   'wa_tpm_high_msg_keluarga',
-            'wa_resolved_msg_keluarga',
+            'wa_resolved_msg_keluarga', 'wa_resolved_msg_suster',
+            'wa_welcome_keluarga',
         ];
         foreach ($fields as $f) {
             if (isset($_POST[$f])) setSetting($f, trim($_POST[$f]));
@@ -114,9 +115,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msgType = 'danger';
         }
     }
-}
+
+    elseif ($action === 'prune_device') {
+        $pruneDeviceId = trim($_POST['prune_device_id'] ?? '');
+        $pruneType     = $_POST['prune_type'] ?? 'all'; // 'infus' | 'nurse' | 'all'
+
+        if (empty($pruneDeviceId)) {
+            $message = 'Pilih perangkat terlebih dahulu.';
+            $msgType = 'danger';
+        } else {
+            try {
+                $db = getDB();
+
+                // Pastikan device valid
+                $devCheck = $db->prepare("SELECT nama FROM devices WHERE device_id = :id");
+                $devCheck->execute([':id' => $pruneDeviceId]);
+                $devRow = $devCheck->fetch();
+
+                if (!$devRow) {
+                    $message = 'Perangkat tidak ditemukan.';
+                    $msgType = 'danger';
+                } else {
+                    $devNama        = $devRow['nama'];
+                    $deletedInfus   = 0;
+                    $deletedNurse   = 0;
+
+                    if ($pruneType === 'infus' || $pruneType === 'all') {
+                        $s = $db->prepare("DELETE FROM infus_data WHERE device_id = :id");
+                        $s->execute([':id' => $pruneDeviceId]);
+                        $deletedInfus = $s->rowCount();
+                    }
+
+                    if ($pruneType === 'nurse' || $pruneType === 'all') {
+                        $s = $db->prepare("DELETE FROM nurse_call_log WHERE device_id = :id AND status = 0");
+                        $s->execute([':id' => $pruneDeviceId]);
+                        $deletedNurse = $s->rowCount();
+                    }
+
+                    $db->query("OPTIMIZE TABLE infus_data");
+                    if ($pruneType === 'nurse' || $pruneType === 'all') {
+                        $db->query("OPTIMIZE TABLE nurse_call_log");
+                    }
+
+                    $parts = [];
+                    if ($deletedInfus > 0) $parts[] = "{$deletedInfus} data sensor";
+                    if ($deletedNurse > 0) $parts[] = "{$deletedNurse} log nurse call";
+                    $detail  = !empty($parts) ? implode(', ', $parts) : 'tidak ada data';
+                    $message = "Data perangkat '{$devNama}' berhasil dihapus ({$detail}).";
+                }
+            } catch (\Exception $e) {
+                $message = 'Gagal menghapus data: ' . $e->getMessage();
+                $msgType = 'danger';
+            }
+        }
+    }
+} // end if POST
 
 $settings      = getAllSettings();
+
+// Ambil daftar devices + jumlah data untuk fitur prune per device
+try {
+    $allDevices = getDB()->query("
+        SELECT d.device_id, d.nama, d.lokasi, d.pasien,
+               (SELECT COUNT(*) FROM infus_data   WHERE device_id = d.device_id) AS cnt_infus,
+               (SELECT COUNT(*) FROM nurse_call_log WHERE device_id = d.device_id AND status = 0) AS cnt_nurse
+        FROM devices d
+        WHERE d.aktif = 1
+        ORDER BY d.nama ASC
+    ")->fetchAll();
+} catch (\Throwable $e) {
+    $allDevices = [];
+}
 $waProvider    = $settings['wa_provider'] ?? 'custom';
 $apiUrl        = $settings['wa_api_url'] ?? '';
 $apiKey        = $settings['wa_api_key'] ?? '';
@@ -136,6 +205,8 @@ $msgTPMKeluarga = $settings['wa_tpm_zero_msg_keluarga']   ?? '';
 $msgTPMHSuster  = $settings['wa_tpm_high_msg_suster']     ?? '';
 $msgTPMHKeluarga= $settings['wa_tpm_high_msg_keluarga']   ?? '';
 $msgOKKeluarga  = $settings['wa_resolved_msg_keluarga']   ?? '';
+$msgOKSuster    = $settings['wa_resolved_msg_suster']     ?? '';
+$msgWelcome     = $settings['wa_welcome_keluarga']         ?? '';
 
 $infusRetention = (int)($settings['db_infus_data_retention'] ?? 3);
 $nurseRetention = (int)($settings['db_nurse_log_retention']  ?? 7);
@@ -427,6 +498,21 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
               <!-- IoT API Key -->
               <div class="mt-5 pt-5 border-t border-slate-200/60">
                 <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                  <i class="bi bi-link-45deg text-primary mr-1"></i> URL Aplikasi (untuk Link Monitor Keluarga)
+                </label>
+                <input type="text" name="app_url" id="app_url"
+                       value="<?= esc($settings['app_url'] ?? '') ?>"
+                       placeholder="https://namadomain.com"
+                       class="w-full bg-slate-50 border border-slate-200 focus:border-primary focus:bg-white rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:ring-4 focus:ring-primary/5" />
+                <div class="text-[9px] font-medium text-slate-500 mt-1.5 leading-relaxed">
+                  <i class="bi bi-info-circle text-blue-500"></i>
+                  URL ini digunakan untuk membuat tautan <code class="font-mono">monitor.php?token=...</code> yang dikirim ke keluarga. Kosongkan jika ingin sistem mendeteksi otomatis.
+                </div>
+              </div>
+
+              <!-- IoT API Key -->
+              <div class="mt-5 pt-5 border-t border-slate-200/60">
+                <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
                   <i class="bi bi-key-fill text-primary mr-1"></i> API Key IoT (Keamanan Perangkat)
                 </label>
                 <div class="relative">
@@ -636,6 +722,7 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
           </div>
 
           <!-- DB Info card -->
+          <!-- DB Info card -->
           <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
             <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Info Pembersihan Otomatis</h3>
             <div class="flex flex-col gap-2 text-xs text-slate-600 leading-relaxed">
@@ -649,9 +736,102 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
               </div>
             </div>
           </div>
+
+        </div> <!-- end sidebar col -->
+      </div> <!-- end grid -->
+
+      <!-- ── Hapus Data Per Perangkat — full width ── -->
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mt-5">
+        <div class="p-4 border-b border-slate-100 flex items-center gap-3" style="background:#fff7f7;">
+          <div class="w-8 h-8 rounded-xl flex items-center justify-center border flex-shrink-0"
+               style="background:#fee2e2;border-color:#fca5a5;color:#dc2626;">
+            <i class="bi bi-cpu-fill text-sm"></i>
+          </div>
+          <div>
+            <h3 class="text-xs font-black text-slate-900 tracking-wider uppercase">Hapus Data Per Perangkat</h3>
+            <p class="text-[10px] text-slate-400 font-medium">Pilih device yang datanya ingin dibersihkan</p>
+          </div>
         </div>
+        <form method="POST" action="settings.php?tab=database" class="p-5" onsubmit="return confirmPrune(this)">
+          <input type="hidden" name="action" value="prune_device" />
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+
+            <!-- Kolom 1: Pilih Perangkat + Info -->
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                  <i class="bi bi-cpu mr-1" style="color:#6b2072;"></i> Perangkat
+                </label>
+                <select name="prune_device_id" id="prune_device_id" required
+                        onchange="updatePruneInfo(this)"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-800 outline-none">
+                  <option value="">— Pilih perangkat —</option>
+                  <?php foreach ($allDevices as $dev): ?>
+                  <option value="<?= esc($dev['device_id']) ?>"
+                          data-nama="<?= esc($dev['nama']) ?>"
+                          data-pasien="<?= esc($dev['pasien'] ?: '-') ?>"
+                          data-cnt-infus="<?= (int)$dev['cnt_infus'] ?>"
+                          data-cnt-nurse="<?= (int)$dev['cnt_nurse'] ?>">
+                    <?= esc($dev['nama']) ?><?= $dev['pasien'] ? ' — ' . esc($dev['pasien']) : '' ?>
+                  </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div id="prune-info" class="hidden p-3 rounded-xl text-[11px] text-slate-600"
+                   style="background:#f8fafc;border:1px solid #e2e8f0;">
+                <div class="flex justify-between mb-1.5">
+                  <span class="font-bold text-slate-500">Data sensor:</span>
+                  <span id="prune-info-infus" class="font-black text-slate-800">—</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="font-bold text-slate-500">Log nurse call selesai:</span>
+                  <span id="prune-info-nurse" class="font-black text-slate-800">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kolom 2: Tipe Data -->
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5">
+                <i class="bi bi-trash3 mr-1" style="color:#ef4444;"></i> Data yang Dihapus
+              </label>
+              <div class="flex flex-col gap-2">
+                <?php foreach ([
+                  ['all',   'Semua data (sensor + nurse call)'],
+                  ['infus', 'Data sensor infus saja'],
+                  ['nurse', 'Log nurse call selesai saja'],
+                ] as [$val, $label]): ?>
+                <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
+                  <input type="radio" name="prune_type" value="<?= $val ?>"
+                         <?= $val === 'all' ? 'checked' : '' ?>
+                         style="accent-color:#6b2072;width:14px;height:14px;flex-shrink:0;" />
+                  <span class="text-xs font-semibold text-slate-700"><?= $label ?></span>
+                </label>
+                <?php endforeach; ?>
+              </div>
+            </div>
+
+            <!-- Kolom 3: Warning + Tombol -->
+            <div class="flex flex-col gap-3">
+              <div class="p-3 rounded-xl text-[10px] font-medium leading-relaxed flex gap-2"
+                   style="background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-0.5"></i>
+                Data yang dihapus <strong>tidak bisa dikembalikan</strong>. Pastikan sudah memilih perangkat yang tepat.
+              </div>
+              <button type="submit"
+                      style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:11px 16px;background:#dc2626;color:#fff;border:none;border-radius:12px;font-size:12px;font-weight:700;letter-spacing:.03em;cursor:pointer;box-shadow:0 4px 12px rgba(220,38,38,.25);"
+                      onmouseover="this.style.background='#b91c1c'"
+                      onmouseout="this.style.background='#dc2626'">
+                <i class="bi bi-trash3-fill"></i> HAPUS DATA PERANGKAT
+              </button>
+            </div>
+
+          </div>
+        </form>
       </div>
-    </div>
+
+    </div> <!-- end panel-database -->
 
     <!-- ═══════════════════════════════════════════
          TAB 3 — TEMPLATE PESAN WA
@@ -777,7 +957,7 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
             ['{pasien}','{lokasi}','{tpm}','{waktu}']
         ); ?>
 
-        <!-- Resolved — Keluarga only -->
+        <!-- Resolved — Suster + Keluarga -->
         <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div class="template-accordion flex items-center justify-between p-4 border-b border-slate-100 bg-emerald-50/30 hover:bg-emerald-50/60 transition-colors" onclick="toggleAccordion('resolved')">
             <div class="flex items-center gap-3">
@@ -786,21 +966,64 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
               </div>
               <div>
                 <h3 class="text-xs font-black text-slate-900 uppercase tracking-wide">✅ Kondisi Normal Kembali</h3>
-                <p class="text-[10px] text-slate-400 font-medium mt-0.5">Hanya ke keluarga pasien</p>
+                <p class="text-[10px] text-slate-400 font-medium mt-0.5">Ke suster & keluarga pasien</p>
               </div>
             </div>
             <i class="bi bi-chevron-down template-chevron open text-slate-400" id="chevron-resolved"></i>
           </div>
           <div class="template-body open p-4 flex flex-col gap-4" id="body-resolved">
-            <div class="max-w-md">
-              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Template Keluarga
-              </label>
-              <textarea name="wa_resolved_msg_keluarga" rows="5" class="mono w-full bg-slate-50 border border-slate-200 focus:border-primary focus:bg-white rounded-xl p-3 text-xs text-slate-700 outline-none transition-all focus:ring-4 focus:ring-primary/5"><?= esc($msgOKKeluarga) ?></textarea>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Template Suster
+                </label>
+                <textarea name="wa_resolved_msg_suster" rows="5" class="mono w-full bg-slate-50 border border-slate-200 focus:border-primary focus:bg-white rounded-xl p-3 text-xs text-slate-700 outline-none transition-all focus:ring-4 focus:ring-primary/5"><?= esc($msgOKSuster) ?></textarea>
+              </div>
+              <div>
+                <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Template Keluarga
+                </label>
+                <textarea name="wa_resolved_msg_keluarga" rows="5" class="mono w-full bg-slate-50 border border-slate-200 focus:border-primary focus:bg-white rounded-xl p-3 text-xs text-slate-700 outline-none transition-all focus:ring-4 focus:ring-primary/5"><?= esc($msgOKKeluarga) ?></textarea>
+              </div>
             </div>
             <div class="flex flex-wrap gap-1 items-center border-t border-slate-100 pt-3">
               <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
               <?php foreach (['{pasien}','{lokasi}','{waktu}','{resolved_label}'] as $v): ?>
+              <code class="text-[9px] font-bold bg-slate-100 text-primary border border-slate-200 px-1.5 py-0.5 rounded font-mono"><?= $v ?></code>
+              <?php endforeach; ?>
+            </div>
+          </div>
+        </div>
+
+        <!-- Welcome Keluarga -->
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="template-accordion flex items-center justify-between p-4 border-b border-slate-100 bg-blue-50/30 hover:bg-blue-50/60 transition-colors" onclick="toggleAccordion('welcome')">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center border border-blue-100 shrink-0">
+                <i class="bi bi-link-45deg text-sm"></i>
+              </div>
+              <div>
+                <h3 class="text-xs font-black text-slate-900 uppercase tracking-wide">🔗 Selamat Datang + Link Monitor</h3>
+                <p class="text-[10px] text-slate-400 font-medium mt-0.5">Dikirim ke keluarga saat nomor pertama didaftarkan</p>
+              </div>
+            </div>
+            <i class="bi bi-chevron-down template-chevron open text-slate-400" id="chevron-welcome"></i>
+          </div>
+          <div class="template-body open p-4 flex flex-col gap-4" id="body-welcome">
+            <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl text-[10px] text-blue-800 font-medium leading-relaxed flex gap-2">
+              <i class="bi bi-info-circle-fill shrink-0 mt-0.5 text-blue-500"></i>
+              Pesan ini dikirim otomatis saat nomor keluarga pertama kali dimasukkan ke data perangkat.
+              Gunakan variabel <code class="font-mono bg-white/70 px-1 rounded">{monitor_url}</code> untuk menyertakan tautan monitoring privat.
+            </div>
+            <div class="max-w-md">
+              <label class="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Template Keluarga
+              </label>
+              <textarea name="wa_welcome_keluarga" rows="7" class="mono w-full bg-slate-50 border border-slate-200 focus:border-primary focus:bg-white rounded-xl p-3 text-xs text-slate-700 outline-none transition-all focus:ring-4 focus:ring-primary/5"><?= esc($msgWelcome) ?></textarea>
+            </div>
+            <div class="flex flex-wrap gap-1 items-center border-t border-slate-100 pt-3">
+              <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider mr-1">Variabel:</span>
+              <?php foreach (['{pasien}','{lokasi}','{waktu}','{monitor_url}'] as $v): ?>
               <code class="text-[9px] font-bold bg-slate-100 text-primary border border-slate-200 px-1.5 py-0.5 rounded font-mono"><?= $v ?></code>
               <?php endforeach; ?>
             </div>
@@ -851,7 +1074,7 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
     }
 
     // ── Accordion toggles ──
-    const accordionIds = ['nurse_call', 'low_vol', 'tpm_zero', 'tpm_high', 'resolved'];
+    const accordionIds = ['nurse_call', 'low_vol', 'tpm_zero', 'tpm_high', 'resolved', 'welcome'];
 
     function toggleAccordion(id) {
       const body = document.getElementById('body-' + id);
@@ -912,6 +1135,104 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
       const active = document.querySelector('input[name="wa_provider"]:checked');
       if (active) switchProvider(active.value);
     })();
+
+    // ── Prune per device ──
+    function updatePruneInfo(sel) {
+      const opt   = sel.options[sel.selectedIndex];
+      const info  = document.getElementById('prune-info');
+      if (!opt.value) { info.classList.add('hidden'); return; }
+
+      const cntInfus = parseInt(opt.dataset.cntInfus || 0).toLocaleString('id-ID');
+      const cntNurse = parseInt(opt.dataset.cntNurse || 0).toLocaleString('id-ID');
+
+      document.getElementById('prune-info-infus').textContent = cntInfus + ' baris';
+      document.getElementById('prune-info-nurse').textContent = cntNurse + ' baris';
+      info.classList.remove('hidden');
+    }
+
+    // ── Modal engine ──────────────────────────────────────
+    function openModal({ icon, iconBg, iconColor, title, subtitle, body, buttons }) {
+      document.getElementById('kiro-modal-icon').style.cssText      = `background:${iconBg};color:${iconColor};`;
+      document.getElementById('kiro-modal-icon').innerHTML           = `<i class="bi bi-${icon}"></i>`;
+      document.getElementById('kiro-modal-title').textContent        = title;
+      document.getElementById('kiro-modal-subtitle').textContent     = subtitle || '';
+      document.getElementById('kiro-modal-body').innerHTML           = body;
+
+      const footer = document.getElementById('kiro-modal-footer');
+      footer.innerHTML = '';
+      buttons.forEach(btn => {
+        const el = document.createElement('button');
+        el.innerHTML   = btn.label;
+        el.style.cssText = btn.style;
+        el.className   = 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 cursor-pointer';
+        el.onclick     = () => { closeModal(); btn.action && btn.action(); };
+        footer.appendChild(el);
+      });
+
+      document.getElementById('kiro-modal-overlay').classList.add('open');
+      document.addEventListener('keydown', _modalEscHandler);
+    }
+
+    function closeModal() {
+      document.getElementById('kiro-modal-overlay').classList.remove('open');
+      document.removeEventListener('keydown', _modalEscHandler);
+    }
+
+    function _modalEscHandler(e) { if (e.key === 'Escape') closeModal(); }
+
+    // ── Ganti alert & confirm prune ───────────────────────
+    let _pendingPruneForm = null;
+
+    function confirmPrune(form) {
+      const sel  = form.querySelector('#prune_device_id');
+      const opt  = sel.options[sel.selectedIndex];
+      const type = form.querySelector('input[name="prune_type"]:checked')?.value || 'all';
+
+      if (!opt.value) {
+        gModal({
+          icon: 'exclamation-triangle-fill', iconBg: '#fffbeb', iconColor: '#d97706',
+          title: 'Pilih Perangkat', sub: 'Perangkat belum dipilih',
+          body: '<p>Silakan pilih perangkat dari dropdown terlebih dahulu sebelum melanjutkan.</p>',
+          buttons: [{ label: '<i class="bi bi-check2"></i> Mengerti', style: 'background:#6b2072;color:#fff;', action: null }]
+        });
+        return false;
+      }
+
+      const typeLabel = {
+        all:   'Semua data (sensor + nurse call)',
+        infus: 'Data sensor infus saja',
+        nurse: 'Log nurse call selesai saja',
+      };
+      const nama     = opt.dataset.nama   || opt.value;
+      const pasien   = opt.dataset.pasien || '-';
+      const cntInfus = parseInt(opt.dataset.cntInfus || 0).toLocaleString('id-ID');
+      const cntNurse = parseInt(opt.dataset.cntNurse || 0).toLocaleString('id-ID');
+
+      _pendingPruneForm = form;
+
+      gModal({
+        icon: 'trash3-fill', iconBg: '#fee2e2', iconColor: '#dc2626',
+        title: 'Konfirmasi Hapus Data', sub: 'Tindakan ini tidak dapat dibatalkan',
+        body: `
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:12px;line-height:1.7;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#64748b;font-weight:600;">Perangkat</span><span style="font-weight:800;color:#0f172a;">${nama}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#64748b;font-weight:600;">Pasien</span><span style="font-weight:800;color:#0f172a;">${pasien}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#64748b;font-weight:600;">Tipe Data</span><span style="font-weight:800;color:#dc2626;">${typeLabel[type]}</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="color:#64748b;font-weight:600;">Baris Sensor</span><span style="font-weight:700;color:#334155;">${cntInfus}</span></div>
+            <div style="display:flex;justify-content:space-between;"><span style="color:#64748b;font-weight:600;">Baris Nurse Log</span><span style="font-weight:700;color:#334155;">${cntNurse}</span></div>
+          </div>
+          <p style="font-size:12px;color:#9f1239;font-weight:600;display:flex;align-items:center;gap:6px;">
+            <i class="bi bi-exclamation-circle-fill"></i>
+            Data yang dihapus <strong>tidak bisa dikembalikan</strong>.
+          </p>`,
+        buttons: [
+          { label: 'Batal', style: 'background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;', action: () => { _pendingPruneForm = null; } },
+          { label: '<i class="bi bi-trash3-fill"></i> Ya, Hapus', style: 'background:#dc2626;color:#fff;', action: () => { if (_pendingPruneForm) _pendingPruneForm.submit(); } },
+        ]
+      });
+
+      return false;
+    }
   </script>
 
 </body>

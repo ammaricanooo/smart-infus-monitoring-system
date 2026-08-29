@@ -34,22 +34,23 @@
 // Addr 269..272: berat kantong mode OTHER  (float, 4 byte)
 // Total: 338 bytes
 
-#define EEPROM_SIZE 338
-#define EEPROM_FLAG_ADDR 0
-#define EEPROM_VALID_FLAG 0xAB
-#define EEPROM_SSID_LEN 1
-#define EEPROM_SSID_DATA 2
-#define EEPROM_PASS_LEN 34
-#define EEPROM_PASS_DATA 35
-#define EEPROM_URL_LEN 99
-#define EEPROM_URL_DATA 100
-#define EEPROM_ID_LEN 228
-#define EEPROM_ID_DATA 229
-#define EEPROM_BERAT500_ADDR 261
-#define EEPROM_BERAT100_ADDR 265
-#define EEPROM_BERATOTHER_ADDR 269
-#define EEPROM_KEY_LEN 273
-#define EEPROM_KEY_DATA 274
+#define EEPROM_SIZE          340
+#define EEPROM_FLAG_ADDR     0
+#define EEPROM_VALID_FLAG    0xAB
+
+#define EEPROM_SSID_LEN      1    // 1 byte
+#define EEPROM_SSID_DATA     2    // 32 byte (2..33)
+#define EEPROM_PASS_LEN      34   // 1 byte
+#define EEPROM_PASS_DATA     35   // 64 byte (35..98)
+#define EEPROM_URL_LEN       99   // 1 byte
+#define EEPROM_URL_DATA      100  // 128 byte (100..227)
+#define EEPROM_ID_LEN        228  // 1 byte
+#define EEPROM_ID_DATA       229  // 32 byte (229..260)
+#define EEPROM_KEY_LEN       261  // 1 byte
+#define EEPROM_KEY_DATA      262  // 64 byte (262..325)
+#define EEPROM_BERAT500_ADDR 326  // 4 byte float (326..329)
+#define EEPROM_BERAT100_ADDR 330  // 4 byte float (330..333)
+#define EEPROM_BERATOTHER_ADDR 334// 4 byte float (334..337)
 
 // ================= PIN CONFIG AP =================
 // CONFIG digabung dengan BUTTON_PIN (pin 27)
@@ -156,6 +157,8 @@ float batteryPercent = 100.0;  // di-update oleh taskBattery, dibaca taskOLED
 // runConfigMode). Mutex memastikan hanya satu "pemilik" buzzer pada satu
 // waktu, supaya bip dari satu task tidak ketimpa/terganggu task lain.
 SemaphoreHandle_t buzzerMutex;
+// Tambahkan bersama SemaphoreHandle_t lainnya
+SemaphoreHandle_t loadCellMutex;
 
 void buzzerBeep(int onMs, int offMs = 0) {
   if (xSemaphoreTake(buzzerMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -184,6 +187,7 @@ TaskHandle_t hWiFi = NULL;
 TaskHandle_t hHTTPPost = NULL;
 TaskHandle_t hBattery = NULL;
 TaskHandle_t hTare = NULL;
+TaskHandle_t hButton = NULL;
 
 // =====================================================
 // ================= WEB AP — HTML PAGE ================
@@ -292,21 +296,22 @@ void eepromWriteStr(int addrLen, int addrData, const char *str, int maxLen) {
   for (int i = 0; i < len; i++)
     EEPROM.write(addrData + i, (uint8_t)str[i]);
   EEPROM.write(addrData + len, 0);
-  EEPROM.commit();
+  // Tidak commit di sini — saveConfig() commit sekali di akhir
 }
 
 void eepromReadStr(int addrLen, int addrData, char *buf, int maxLen) {
   int len = (int)EEPROM.read(addrLen);
   if (len < 0 || len > maxLen) len = 0;
-  for (int i = 0; i < len; i++)
+  for (int i = 0; i < len; i++) {
     buf[i] = (char)EEPROM.read(addrData + i);
-  buf[len] = '\0';
+  }
+  buf[len] = '\0'; // Pastikan string selalu ditutup
 }
 
 void eepromWriteFloat(int addr, float val) {
   uint8_t *p = (uint8_t *)&val;
   for (int i = 0; i < 4; i++) EEPROM.write(addr + i, p[i]);
-  EEPROM.commit();
+  // Tidak commit di sini — saveConfig() commit sekali di akhir
 }
 
 float eepromReadFloat(int addr, float def) {
@@ -377,73 +382,83 @@ void showConfigScreen() {
 void runConfigMode() {
   Serial.println("\n[AP] Masuk mode konfigurasi Web AP");
 
-  // ── Suspend semua task lain agar tidak ada konflik I2C/WiFi/WDT ──────
-  // Urutan: hentikan pengiriman data dulu, lalu sensor, lalu UI
-  if (hHTTPPost != NULL) vTaskSuspend(hHTTPPost);
-  if (hWiFi != NULL) vTaskSuspend(hWiFi);
-  if (hTPM != NULL) vTaskSuspend(hTPM);
-  if (hLoadCell != NULL) vTaskSuspend(hLoadCell);
-  if (hBattery != NULL) vTaskSuspend(hBattery);
+  // ── Suspend semua task lain ────────────────────────────────────────────
+  if (hHTTPPost  != NULL) vTaskSuspend(hHTTPPost);
+  if (hWiFi      != NULL) vTaskSuspend(hWiFi);
+  if (hTPM       != NULL) vTaskSuspend(hTPM);
+  if (hLoadCell  != NULL) vTaskSuspend(hLoadCell);
+  if (hBattery   != NULL) vTaskSuspend(hBattery);
   if (hNurseCall != NULL) vTaskSuspend(hNurseCall);
-  if (hTare != NULL) vTaskSuspend(hTare);
-  if (hSerial != NULL) vTaskSuspend(hSerial);
-  if (hOLED != NULL) vTaskSuspend(hOLED);  // suspend OLED terakhir
+  if (hTare      != NULL) vTaskSuspend(hTare);
+  if (hSerial    != NULL) vTaskSuspend(hSerial);
+  if (hOLED      != NULL) vTaskSuspend(hOLED);
 
-  // Nonaktifkan interrupt IR agar tidak ada ISR yang jalan
+  // Nonaktifkan interrupt IR
   detachInterrupt(digitalPinToInterrupt(IR_SENSOR_PIN));
 
-  // Pastikan buzzer dalam keadaan mati. Task yang baru disuspend di atas
-  // bisa saja berhenti tepat di tengah sebuah bip (buzzer masih HIGH) —
-  // tanpa baris ini buzzer berisiko macet berbunyi terus.
+  // Pastikan buzzer mati (task yang baru di-suspend bisa berhenti saat buzzer HIGH)
   digitalWrite(BUZZER, LOW);
-
-  // Delay kecil agar semua task benar-benar berhenti
   delay(200);
 
-  // Bunyi buzzer 2x tanda masuk config mode
-  buzzerBeepN(2, 100, 150);
+  // Bip 2x langsung tanpa mutex (semua task sudah suspend, tidak ada konflik)
+  for (int i = 0; i < 2; i++) {
+    digitalWrite(BUZZER, HIGH); delay(100);
+    digitalWrite(BUZZER, LOW);  delay(150);
+  }
 
-  // Matikan WiFi station dulu
+  // ── Reset WiFi sepenuhnya ────────────────────────────────────────────
   WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
   delay(300);
 
-  // Buka Access Point
+  // ── Buka Access Point ────────────────────────────────────────────────
   WiFi.mode(WIFI_AP);
+  delay(100);
+
   IPAddress localIP(192, 168, 4, 1);
   IPAddress gateway(192, 168, 4, 1);
   IPAddress subnet(255, 255, 255, 0);
   WiFi.softAPConfig(localIP, gateway, subnet);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
 
+  // Tunggu AP benar-benar aktif (event SYSTEM_EVENT_AP_START)
+  // Polling lebih reliable daripada delay tetap
+  unsigned long apWait = millis();
+  while (WiFi.softAPIP() == IPAddress(0, 0, 0, 0) && millis() - apWait < 3000) {
+    delay(50);
+  }
+
   Serial.print("[AP] IP: ");
   Serial.println(WiFi.softAPIP());
 
-  // Daftarkan routes web server
-  webServer.on("/", HTTP_GET, handleRoot);
-  webServer.on("/current", HTTP_GET, handleCurrent);
-  webServer.on("/save", HTTP_POST, handleSave);
+  // ── Register routes (hanya 1x) ───────────────────────────────────────
+  webServer.on("/",        HTTP_GET,  handleRoot);
+  webServer.on("/current", HTTP_GET,  handleCurrent);
+  webServer.on("/save",    HTTP_POST, handleSave);
   webServer.onNotFound(handleNotFound);
   webServer.begin();
 
-  Serial.println("[AP] Web server berjalan di port 80");
+  Serial.println("[AP] Web server aktif di port 80");
 
-  // Tampilkan layar config di OLED (langsung dari sini, bukan via task)
+  // Tampilkan layar config di OLED
   showConfigScreen();
 
-  // ── Loop utama config mode ────────────────────────────────────────────
-  // Gunakan vTaskDelay agar FreeRTOS idle task tetap jalan (reset WDT)
-  unsigned long lastOledUpdate = 0;
+  // ── Loop config mode ─────────────────────────────────────────────────
+  // Semua task sudah suspend → delay() aman, tidak perlu vTaskDelay.
+  // OLED update tiap 5 detik — display.display() blok I2C puluhan ms,
+  // terlalu sering bikin koneksi TCP browser timeout.
+  unsigned long lastOledUpdate = millis();
   while (true) {
     webServer.handleClient();
 
-    if (millis() - lastOledUpdate > 1000) {
+    if (millis() - lastOledUpdate > 5000) {
       lastOledUpdate = millis();
       showConfigScreen();
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));  // yield ke FreeRTOS scheduler / WDT
+    delay(2);
   }
-  // Loop tidak pernah return — handleSave() panggil ESP.restart()
+  // Tidak pernah return — handleSave() panggil ESP.restart()
 }
 
 // =====================================================
@@ -475,7 +490,14 @@ void updateVolumeMode() {
     calibrationFactor = CAL_OTHER;
     currentVolumeAwal = volumeSisaBerat > 0 ? volumeSisaBerat : 0.0;
   }
-  scale.set_scale(calibrationFactor);
+
+  // Kunci akses saat mengubah kalibrasi scale
+  if (xSemaphoreTake(loadCellMutex, pdMS_TO_TICKS(500)) == pdTRUE) {
+    scale.set_scale(calibrationFactor);
+    xSemaphoreGive(loadCellMutex);
+  } else {
+    Serial.println("[Mode] Gagal update calibration factor: LoadCell sibuk.");
+  }
 }
 
 // =====================================================
@@ -604,12 +626,21 @@ void taskTare(void *pvParameters) {
   while (1) {
     bool reading = digitalRead(TARE_BUTTON_PIN);
     if (reading == LOW && lastState == HIGH) {
-      Serial.println("[Tare] Tare dipicu — mengganti titik nol timbangan...");
-      scale.tare();          // blok ~400ms, tapi di task tersendiri tidak masalah
-      totalDrops = 0;
-      buzzerBeepN(2, 80, 80);
-      Serial.println("[Tare] Selesai.");
-      vTaskDelay(pdMS_TO_TICKS(300));  // debounce
+      Serial.println("[Tare] Tare dipicu — menunggu giliran akses sensor...");
+      
+      // Tunggu hingga HX711 bebas (timeout 1000ms karena tare butuh waktu)
+      if (xSemaphoreTake(loadCellMutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        scale.tare(); 
+        totalDrops = 0;
+        xSemaphoreGive(loadCellMutex); // Lepas kunci
+        
+        buzzerBeepN(2, 80, 80);
+        Serial.println("[Tare] Selesai.");
+      } else {
+        Serial.println("[Tare] Gagal tare: HX711 sedang sibuk!");
+      }
+
+      vTaskDelay(pdMS_TO_TICKS(300)); // debounce
     }
     lastState = reading;
     vTaskDelay(pdMS_TO_TICKS(30));
@@ -622,7 +653,16 @@ void taskTare(void *pvParameters) {
 
 void taskLoadCell(void *pvParameters) {
   while (1) {
-    float beratTotal = scale.get_units(3);
+    float beratTotal = 0;
+
+    // Kunci akses ke HX711
+    if (xSemaphoreTake(loadCellMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
+      beratTotal = scale.get_units(3);
+      xSemaphoreGive(loadCellMutex); // Lepas kunci
+    } else {
+      Serial.println("[LoadCell] Gagal ambil mutex, skip pembacaan ini.");
+    }
+
     if (beratTotal < 0) beratTotal = 0;
 
     // Pilih berat kantong sesuai mode aktif
@@ -952,6 +992,7 @@ void setup() {
   pinMode(BUZZER, OUTPUT);
   digitalWrite(BUZZER, LOW);
   buzzerMutex = xSemaphoreCreateMutex();
+  loadCellMutex = xSemaphoreCreateMutex();
 
   // ===== ADC BATERAI =====
   // Default attenuation ESP32 (0dB, max ~1.1V) tidak cukup untuk tegangan
@@ -1000,7 +1041,9 @@ void setup() {
   xTaskCreatePinnedToCore(taskTPM, "TPM", 4000, NULL, 1, &hTPM, 1);
   xTaskCreatePinnedToCore(taskOLED, "OLED", 6000, NULL, 1, &hOLED, 0);
   xTaskCreatePinnedToCore(taskSerial, "Serial", 4000, NULL, 1, &hSerial, 0);
-  xTaskCreatePinnedToCore(taskButton, "Button", 3000, NULL, 1, NULL, 0);
+  // taskButton stack 12000: task ini bisa masuk runConfigMode() yang
+  // menjalankan WebServer + ArduinoJson di stack yang sama
+  xTaskCreatePinnedToCore(taskButton, "Button", 12000, NULL, 1, &hButton, 0);
   xTaskCreatePinnedToCore(taskNurseCall, "NurseCall", 2000, NULL, 1, &hNurseCall, 0);
   xTaskCreatePinnedToCore(taskTare, "Tare", 2500, NULL, 1, &hTare, 0);
   xTaskCreatePinnedToCore(taskWiFi, "WiFi", 4000, NULL, 1, &hWiFi, 0);

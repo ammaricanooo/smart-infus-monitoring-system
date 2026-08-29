@@ -116,7 +116,7 @@ function _navItem(string $href, string $icon, string $label, bool $active): stri
       </div>
     </div>
     <a href="logout.php"
-       onclick="return confirm('Yakin ingin logout?')"
+       onclick="confirmLogout('logout.php'); return false;"
        class="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 transition-all"
        onmouseover="this.style.background='#fef2f2';this.style.color='#dc2626';"
        onmouseout="this.style.background='';this.style.color='#64748b';">
@@ -157,15 +157,8 @@ function _navItem(string $href, string $icon, string $label, bool $active): stri
     <span class="text-sm font-bold text-slate-600"><?= $pageTitle['label'] ?></span>
   </div>
 
-  <!-- Kanan: SSE indicator + jam -->
+  <!-- Kanan: jam -->
   <div class="flex items-center gap-3">
-    <?php if (isset($showSseIndicator) && $showSseIndicator): ?>
-    <div id="sse-indicator"
-      style="display:none;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">
-      <span id="sse-dot" style="width:7px;height:7px;border-radius:50%;background:#cbd5e1;flex-shrink:0;display:inline-block;"></span>
-      <span id="sse-label" style="color:#94a3b8;">Menghubungkan…</span>
-    </div>
-    <?php endif; ?>
     <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;">
       <span id="clockText" class="text-sm font-bold text-slate-700 tabular-nums">--:--:--</span>
     </div>
@@ -216,7 +209,7 @@ function _navItem(string $href, string $icon, string $label, bool $active): stri
     <?= _mobileNavItem('docs.php', 'book-half', 'Docs', $_activePage === 'docs') . '' ?>
 
     <?php if ($_isLoggedIn): ?>
-    <a href="logout.php" onclick="return confirm('Logout?')"
+    <a href="logout.php" onclick="confirmLogout('logout.php'); return false;"
        class="flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all"
        style="color:#64748b;"
        onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#64748b'">
@@ -282,4 +275,88 @@ function _navItem(string $href, string $icon, string $label, bool $active): stri
   window.isDetailPage = <?= strpos($_SERVER['SCRIPT_NAME'], 'detail.php') !== false ? 'true' : 'false' ?>;
 </script>
 <script src="assets/js/notifications.js?v=<?= time() ?>"></script>
+
+<!-- ── Global Modal Engine (tersedia di semua halaman) ── -->
+<style>
+#g-modal-overlay{display:none;position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);align-items:center;justify-content:center;}
+#g-modal-overlay.open{display:flex;}
+#g-modal-box{background:#fff;border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.2);width:100%;max-width:400px;margin:16px;animation:gModalIn .18s ease;}
+@keyframes gModalIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+</style>
+
+<div id="g-modal-overlay" onclick="if(event.target===this)gModalClose()">
+  <div id="g-modal-box">
+    <div id="g-modal-head" style="display:flex;align-items:center;gap:12px;padding:20px 20px 16px;border-bottom:1px solid #f1f5f9;">
+      <div id="g-modal-icon" style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;"></div>
+      <div style="flex:1;min-width:0;">
+        <div id="g-modal-title" style="font-size:14px;font-weight:900;color:#0f172a;"></div>
+        <div id="g-modal-sub"   style="font-size:10px;font-weight:700;color:#94a3b8;margin-top:2px;"></div>
+      </div>
+      <button onclick="gModalClose()" style="color:#cbd5e1;background:none;border:none;cursor:pointer;font-size:14px;padding:4px;line-height:1;" onmouseover="this.style.color='#64748b'" onmouseout="this.style.color='#cbd5e1'">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div id="g-modal-body" style="padding:16px 20px;font-size:13px;color:#475569;line-height:1.6;"></div>
+    <div id="g-modal-foot" style="padding:0 20px 20px;display:flex;gap:10px;justify-content:flex-end;"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  let _cb = null;
+
+  window.gModal = function({ icon, iconBg, iconColor, title, sub, body, buttons }) {
+    document.getElementById('g-modal-icon').style.cssText = `background:${iconBg};color:${iconColor};width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;`;
+    document.getElementById('g-modal-icon').innerHTML     = `<i class="bi bi-${icon}"></i>`;
+    document.getElementById('g-modal-title').textContent  = title;
+    document.getElementById('g-modal-sub').textContent    = sub || '';
+    document.getElementById('g-modal-body').innerHTML     = body || '';
+    const foot = document.getElementById('g-modal-foot');
+    foot.innerHTML = '';
+    (buttons || []).forEach(function(b){
+      const btn = document.createElement('button');
+      btn.innerHTML = b.label;
+      btn.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;transition:opacity .15s;border:none;' + (b.style||'');
+      btn.onmouseover = function(){ this.style.opacity='.85'; };
+      btn.onmouseout  = function(){ this.style.opacity='1'; };
+      btn.onclick = function(){ gModalClose(); if(b.action) b.action(); };
+      foot.appendChild(btn);
+    });
+    document.getElementById('g-modal-overlay').classList.add('open');
+    document.addEventListener('keydown', _esc);
+  };
+
+  window.gModalClose = function(){
+    document.getElementById('g-modal-overlay').classList.remove('open');
+    document.removeEventListener('keydown', _esc);
+  };
+
+  function _esc(e){ if(e.key==='Escape') gModalClose(); }
+
+  // ── Logout modal ──────────────────────────────────────
+  window.confirmLogout = function(href){
+    gModal({
+      icon:'box-arrow-right', iconBg:'#fef2f2', iconColor:'#dc2626',
+      title:'Konfirmasi Logout', sub:'Sesi Anda akan diakhiri',
+      body:'<p>Apakah Anda yakin ingin keluar dari sistem?</p>',
+      buttons:[
+        { label:'Batal',              style:'background:#f1f5f9;color:#475569;',                           action: null },
+        { label:'<i class="bi bi-box-arrow-right"></i> Ya, Logout', style:'background:#dc2626;color:#fff;box-shadow:0 4px 12px rgba(220,38,38,.2);', action: function(){ window.location.href = href; } },
+      ]
+    });
+  };
+
+  // ── Generic confirm modal (untuk delete/deactivate) ──
+  window.confirmAction = function({ icon, iconBg, iconColor, title, sub, body, confirmLabel, confirmStyle, formId }){
+    gModal({
+      icon, iconBg, iconColor, title, sub, body,
+      buttons:[
+        { label:'Batal', style:'background:#f1f5f9;color:#475569;', action: null },
+        { label: confirmLabel, style: confirmStyle + ';box-shadow:0 4px 12px rgba(0,0,0,.12);',
+          action: function(){ document.getElementById(formId).submit(); } },
+      ]
+    });
+  };
+})();
+</script>
 

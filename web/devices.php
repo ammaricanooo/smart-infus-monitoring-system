@@ -7,6 +7,8 @@
 
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/auth.php';
+require_once __DIR__ . '/config/whatsapp.php';
+require_once __DIR__ . '/config/settings.php';
 
 requireAccess('devices'); // hanya superadmin/admin yang boleh akses
 
@@ -19,6 +21,37 @@ if (!function_exists('esc')) {
     function esc($string) {
         return htmlspecialchars($string ?? '', ENT_QUOTES, 'UTF-8');
     }
+}
+
+// ── Helper: kirim WA welcome ke keluarga ──────────────────────────────
+function sendFamilyWelcome(PDO $db, string $device_id, string $no_keluarga): void {
+    $stmt = $db->prepare("SELECT * FROM devices WHERE device_id = :id");
+    $stmt->execute([':id' => $device_id]);
+    $device = $stmt->fetch();
+    if (!$device) return;
+
+    $template = getSetting('wa_welcome_keluarga', '');
+    if (empty($template)) return;
+
+    // Buat URL monitor: pakai APP_URL setting atau deteksi otomatis
+    $appUrl = rtrim(getSetting('app_url', ''), '/');
+    if (empty($appUrl)) {
+        $scheme  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host    = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $script  = dirname($_SERVER['SCRIPT_NAME'] ?? '/');
+        $appUrl  = rtrim($scheme . '://' . $host . $script, '/');
+    }
+    $monitorUrl = $appUrl . '/monitor.php?token=' . urlencode($device['family_token']);
+
+    $vars = [
+        'pasien'      => $device['pasien']  ?: '-',
+        'lokasi'      => $device['lokasi']  ?: '-',
+        'waktu'       => date('d/m/Y H:i:s'),
+        'monitor_url' => $monitorUrl,
+    ];
+
+    $message = renderWaMessage($template, $vars);
+    sendWhatsApp([$no_keluarga], $message);
 }
 
 // --- FORM CONTROLLER (POST BUSINESS LOGIC) ---
@@ -39,38 +72,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Device ID '" . $device_id . "' sudah terdaftar dalam sistem!";
             $msgType = 'danger';
         } else {
+            // Generate token unik untuk akses keluarga
+            $family_token = bin2hex(random_bytes(16));
+
             $stmt = $db->prepare("
-                INSERT INTO devices (device_id, nama, lokasi, pasien, no_suster, no_keluarga)
-                VALUES (:device_id, :nama, :lokasi, :pasien, :no_suster, :no_keluarga)
+                INSERT INTO devices (device_id, nama, lokasi, pasien, no_suster, no_keluarga, family_token)
+                VALUES (:device_id, :nama, :lokasi, :pasien, :no_suster, :no_keluarga, :family_token)
             ");
             $stmt->execute([
-                ':device_id'   => $device_id,
-                ':nama'        => $nama,
-                ':lokasi'      => $lokasi,
-                ':pasien'      => $pasien,
-                ':no_suster'   => $no_suster,
-                ':no_keluarga' => $no_keluarga,
+                ':device_id'    => $device_id,
+                ':nama'         => $nama,
+                ':lokasi'       => $lokasi,
+                ':pasien'       => $pasien,
+                ':no_suster'    => $no_suster,
+                ':no_keluarga'  => $no_keluarga,
+                ':family_token' => $family_token,
             ]);
             $message = "Perangkat '" . $nama . "' sukses didaftarkan!";
+
+            // Kirim WA welcome ke keluarga jika nomor diisi
+            if (!empty($no_keluarga)) {
+                sendFamilyWelcome($db, $device_id, $no_keluarga);
+            }
         }
     } 
     
     elseif ($action === 'edit' && $device_id && $nama) {
+        // Cek apakah no_keluarga berubah dari sebelumnya
+        $prevStmt = $db->prepare("SELECT no_keluarga, family_token FROM devices WHERE device_id = :id");
+        $prevStmt->execute([':id' => $device_id]);
+        $prev = $prevStmt->fetch();
+        $prevNoKeluarga = trim($prev['no_keluarga'] ?? '');
+        $prevToken      = trim($prev['family_token'] ?? '');
+
+        // Jika belum punya token, buat sekarang
+        if (empty($prevToken)) {
+            $prevToken = bin2hex(random_bytes(16));
+        }
+
         $stmt = $db->prepare("
             UPDATE devices
             SET nama = :nama, lokasi = :lokasi, pasien = :pasien,
-                no_suster = :no_suster, no_keluarga = :no_keluarga
+                no_suster = :no_suster, no_keluarga = :no_keluarga,
+                family_token = :family_token
             WHERE device_id = :device_id
         ");
         $stmt->execute([
-            ':device_id'   => $device_id,
-            ':nama'        => $nama,
-            ':lokasi'      => $lokasi,
-            ':pasien'      => $pasien,
-            ':no_suster'   => $no_suster,
-            ':no_keluarga' => $no_keluarga,
+            ':device_id'    => $device_id,
+            ':nama'         => $nama,
+            ':lokasi'       => $lokasi,
+            ':pasien'       => $pasien,
+            ':no_suster'    => $no_suster,
+            ':no_keluarga'  => $no_keluarga,
+            ':family_token' => $prevToken,
         ]);
         $message = "Data perangkat '" . $nama . "' berhasil diperbarui!";
+
+        // Kirim WA welcome jika no_keluarga baru diisi atau berganti nomor
+        if (!empty($no_keluarga) && $no_keluarga !== $prevNoKeluarga) {
+            sendFamilyWelcome($db, $device_id, $no_keluarga);
+        }
     } 
     
     elseif ($action === 'delete' && $device_id) {
@@ -335,10 +396,11 @@ $activePage = 'devices';
                     </a>
 
                     <!-- Delete Soft Form -->
-                    <form method="POST" action="devices.php" class="inline" onsubmit="return confirm('Apakah Anda yakin ingin menonaktifkan unit <?= esc(addslashes($dev['nama'])) ?>?')">
+                    <form method="POST" action="devices.php" class="inline" id="form-del-<?= esc($dev['device_id']) ?>">
                       <input type="hidden" name="action" value="delete" />
                       <input type="hidden" name="device_id" value="<?= esc($dev['device_id']) ?>" />
-                      <button type="submit" title="Drop Device"
+                      <button type="button" title="Drop Device"
+                              onclick="confirmAction({icon:'trash3-fill',iconBg:'#fee2e2',iconColor:'#dc2626',title:'Nonaktifkan Perangkat',sub:'<?= esc(addslashes($dev['nama'])) ?>',body:'<p>Perangkat <strong><?= esc(addslashes($dev['nama'])) ?></strong> akan dinonaktifkan dan tidak muncul di dashboard.<br><br>Data historis tetap tersimpan.</p>',confirmLabel:'<i class=\'bi bi-trash3-fill\'></i> Ya, Nonaktifkan',confirmStyle:'background:#dc2626;color:#fff;',formId:'form-del-<?= esc($dev['device_id']) ?>'})"
                               class="w-8 h-8 bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-500 hover:text-white rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-90">
                         <i class="bi bi-trash3-fill text-[11px]"></i>
                       </button>

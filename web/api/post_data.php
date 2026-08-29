@@ -254,13 +254,21 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
     $isResolved = ($type === 'resolved');
 
     if ($isResolved) {
-        // Resolved: hanya ke keluarga, satu template
-        if (empty($noKeluarga)) return;
-        $templateKey = 'wa_resolved_msg_keluarga';
-        $template    = getSetting($templateKey, getSetting('wa_resolved_msg', ''));
-        if (empty($template)) return;
-        $message = renderWaMessage($template, $vars);
-        sendWhatsApp([$noKeluarga], $message);
+        // Resolved: ke keluarga DAN ke suster (template terpisah)
+        if (!empty($noKeluarga)) {
+            $templateKey = 'wa_resolved_msg_keluarga';
+            $template    = getSetting($templateKey, getSetting('wa_resolved_msg', ''));
+            if (!empty($template)) {
+                sendWhatsApp([$noKeluarga], renderWaMessage($template, $vars));
+            }
+        }
+        if (!empty($noSuster)) {
+            $templateSuster = getSetting('wa_resolved_msg_suster', '');
+            if (!empty($templateSuster)) {
+                sendWhatsApp([$noSuster], renderWaMessage($templateSuster, $vars));
+            }
+        }
+        return;
     } else {
         // Kirim dua request terpisah: satu ke suster, satu ke keluarga
         $keyMap = [

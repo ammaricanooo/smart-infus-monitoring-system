@@ -3,6 +3,9 @@
 // KONFIGURASI DATABASE & ENVIRONMENT
 // =====================================================
 
+// Set timezone PHP ke WIB (Asia/Jakarta = UTC+7)
+date_default_timezone_set('Asia/Jakarta');
+
 if (!function_exists('loadEnv')) {
     /**
      * Helper untuk meload file .env secara mandiri
@@ -68,6 +71,9 @@ function getDB(): PDO {
             ];
 
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
+
+            // Set timezone MySQL ke WIB (UTC+7)
+            $pdo->exec("SET time_zone = '+07:00'");
 
         } catch (PDOException $e) {
 

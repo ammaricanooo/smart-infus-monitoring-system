@@ -141,16 +141,21 @@ function showMsg(msg,ok){
   a.className='alert '+(ok?'ok':'err');
   a.style.display='block';
 }
-fetch('/current').then(function(r){return r.json();}).then(function(d){
-  $('#ssid').value=d.ssid||'';
-  $('#pass').value=d.pass||'';
-  $('#url').value=d.url||'';
-  $('#did').value=d.deviceId||'';
-  $('#apikey').value=d.apiKey||'';
-  $('#berat500').value=d.berat500||25;
-  $('#berat100').value=d.berat100||25;
-  $('#beratOther').value=d.beratOther||25;
-});
+var ctrl=new AbortController();
+var tid=setTimeout(function(){ctrl.abort();},4000);
+fetch('/current',{signal:ctrl.signal})
+  .then(function(r){clearTimeout(tid);return r.json();})
+  .then(function(d){
+    $('#ssid').value=d.ssid||'';
+    $('#pass').value=d.pass||'';
+    $('#url').value=d.url||'';
+    $('#did').value=d.deviceId||'';
+    $('#apikey').value=d.apiKey||'';
+    $('#berat500').value=d.berat500||25;
+    $('#berat100').value=d.berat100||25;
+    $('#beratOther').value=d.beratOther||25;
+  })
+  .catch(function(){clearTimeout(tid);/* gagal load current — form tetap bisa diisi manual */});
 $('#frm').addEventListener('submit',function(e){
   e.preventDefault();
   var btn=$('#btn');

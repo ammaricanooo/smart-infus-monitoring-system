@@ -160,10 +160,22 @@ function ensureUsersTable(): void {
             'wa_tpm_high_msg_suster'     => "TPM TERLALU CEPAT \xE2\x9A\xA1\nPasien: {pasien}\nLokasi: {lokasi}\nTPM: {tpm} tetes/menit\nWaktu: {waktu}\n\nHarap periksa dan sesuaikan pengaturan.",
             'wa_tpm_high_msg_keluarga'   => "INFO TEKNIS \xE2\x84\xB9\xEF\xB8\x8F\nPerangkat infus {pasien} di {lokasi} membutuhkan penyesuaian.\nWaktu: {waktu}\n\nTim medis sedang menangani.",
             'wa_resolved_msg_keluarga'   => "KONDISI NORMAL \xE2\x9C\x85\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.",
+            'wa_resolved_msg_suster'     => "KONDISI NORMAL \xE2\x9C\x85\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\n{resolved_label}. Tidak perlu menuju ruangan.",
+            'wa_welcome_keluarga'        => "Halo! \xF0\x9F\x91\x8B\nAnda terdaftar sebagai kontak keluarga untuk pasien *{pasien}* di *{lokasi}*.\n\nAnda bisa memantau kondisi infus secara langsung melalui tautan berikut:\n{monitor_url}\n\n_Tautan ini khusus untuk Anda. Jangan bagikan ke orang lain._",
         ];
         $ins = $db->prepare("INSERT IGNORE INTO settings (key_name, key_value) VALUES (?, ?)");
         foreach ($newSettings as $k => $v) {
             $ins->execute([$k, $v]);
+        }
+        // Migrate: tambah kolom family_token ke devices jika belum ada
+        try {
+            $col = $db->query("SHOW COLUMNS FROM devices LIKE 'family_token'")->fetch();
+            if (!$col) {
+                $db->exec("ALTER TABLE devices ADD COLUMN `family_token` VARCHAR(64) NOT NULL DEFAULT '' AFTER `no_keluarga`");
+                $db->exec("UPDATE devices SET family_token = LOWER(REPLACE(UUID(), '-', '')) WHERE family_token = ''");
+            }
+        } catch (\Throwable $e) {
+            error_log('Migration family_token error: ' . $e->getMessage());
         }
     } catch (\Throwable $e) {
         error_log('ensureUsersTable error: ' . $e->getMessage());
