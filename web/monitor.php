@@ -417,6 +417,10 @@ foreach ($history as $h) {
       const vol = parseFloat(data.volume_sisa || 0);
       const pct = parseFloat(data.persen || 0);
       const tpm = parseFloat(data.tpm || 0);
+      const tgt = parseInt(data.target_tpm || 20);
+      const tol = parseInt(data.tpm_tolerance || 5);
+      const minTpm = Math.max(1, tgt - tol);
+      const maxTpm = tgt + tol;
 
       const isLow = (pct > 0 && pct <= 20) || (pct === 0 && vol > 0 && vol <= 20);
 
@@ -431,7 +435,19 @@ foreach ($history as $h) {
         icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-purple-100 border border-purple-200 text-purple-600';
         icon.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>';
         title.textContent = 'Infus Perlu Diperhatikan';
-        desc.textContent = 'Tim medis telah diberitahu dan sedang menangani.';
+        desc.textContent = 'Tidak ada tetesan terdeteksi (Macet). Tim medis telah diberitahu dan sedang menangani.';
+      } else if (tpm > maxTpm && vol > 0) {
+        card.style.cssText = 'border-color:#fda4af;background:#fff1f2;';
+        icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-rose-100 border border-rose-200 text-rose-600';
+        icon.innerHTML = '<i class="bi bi-speedometer2"></i>';
+        title.textContent = 'Laju Tetesan Sedikit Cepat';
+        desc.textContent = `Kecepatan tetesan ${Math.round(tpm)} TPM (Target: ${tgt} ± ${tol} TPM). Tim medis sedang menyesuaikan klem.`;
+      } else if (tpm > 0 && tpm < minTpm && vol > 0) {
+        card.style.cssText = 'border-color:#fcd34d;background:#fffbeb;';
+        icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-amber-100 border border-amber-200 text-amber-600';
+        icon.innerHTML = '<i class="bi bi-arrow-down-circle"></i>';
+        title.textContent = 'Laju Tetesan Sedikit Lambat';
+        desc.textContent = `Kecepatan tetesan ${Math.round(tpm)} TPM (Target: ${tgt} ± ${tol} TPM). Tim medis sedang memeriksa aliran.`;
       } else if (vol === 0) {
         card.style.cssText = 'border-color:#a7f3d0;background:#ecfdf5;';
         icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-emerald-100 border border-emerald-200 text-emerald-600';
@@ -443,7 +459,7 @@ foreach ($history as $h) {
         icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-emerald-50 border border-emerald-100 text-emerald-600';
         icon.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
         title.textContent = 'Kondisi Normal';
-        desc.textContent = 'Infus berjalan lancar. Tidak ada yang perlu dikhawatirkan.';
+        desc.textContent = `Infus berjalan lancar (${Math.round(tpm)} TPM, Target: ${tgt} ± ${tol} TPM). Tidak ada yang perlu dikhawatirkan.`;
       }
     }
 

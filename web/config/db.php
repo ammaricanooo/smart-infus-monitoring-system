@@ -75,6 +75,24 @@ function getDB(): PDO {
             // Set timezone MySQL ke WIB (UTC+7)
             $pdo->exec("SET time_zone = '+07:00'");
 
+            // ── Auto-Migration: pastikan kolom dinamis TPM tersedia di tabel devices ──
+            static $migrated = false;
+            if (!$migrated) {
+                try {
+                    $cols = $pdo->query("SHOW COLUMNS FROM `devices` LIKE 'target_tpm'")->fetch();
+                    if (!$cols) {
+                        $pdo->exec("ALTER TABLE `devices` ADD COLUMN `target_tpm` INT(11) NOT NULL DEFAULT 20 AFTER `pasien`");
+                    }
+                    $colsTol = $pdo->query("SHOW COLUMNS FROM `devices` LIKE 'tpm_tolerance'")->fetch();
+                    if (!$colsTol) {
+                        $pdo->exec("ALTER TABLE `devices` ADD COLUMN `tpm_tolerance` INT(11) NOT NULL DEFAULT 5 AFTER `target_tpm`");
+                    }
+                } catch (\Throwable $mErr) {
+                    // Ignore error jika tabel devices belum dibuat
+                }
+                $migrated = true;
+            }
+
         } catch (PDOException $e) {
 
             http_response_code(500);

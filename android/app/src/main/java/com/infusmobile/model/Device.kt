@@ -5,6 +5,8 @@ data class Device(
     val nama: String,
     val lokasi: String,
     val pasien: String,
+    val targetTpm: Int = 20,
+    val tpmTolerance: Int = 5,
     val tpm: Int,
     val volumeSisa: Int,
     val volumeAwal: Int,

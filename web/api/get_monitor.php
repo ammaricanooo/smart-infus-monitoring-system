@@ -91,6 +91,8 @@ if (!empty($_GET['nurse_log'])) {
 $stmt = $db->prepare("
     SELECT
         d.device_id, d.nama, d.lokasi, d.pasien,
+        COALESCE(d.target_tpm, 20) AS target_tpm,
+        COALESCE(d.tpm_tolerance, 5) AS tpm_tolerance,
         i.tpm, i.volume_sisa, i.volume_awal, i.persen,
         i.estimasi_jam, i.estimasi_mnt, i.total_tetes,
         i.nurse_call, i.mode, i.created_at
@@ -113,6 +115,10 @@ if ($result) {
         $isOnline = (time() - strtotime($result['created_at'])) < 30;
     }
     $result['is_online'] = $isOnline;
+    $tgt = (int)$result['target_tpm'];
+    $tol = (int)$result['tpm_tolerance'];
+    $result['tpm_min'] = max(1, $tgt - $tol);
+    $result['tpm_max'] = $tgt + $tol;
     // Hapus info sensitif — keluarga tidak perlu tahu device_id teknis
     unset($result['device_id']);
 }

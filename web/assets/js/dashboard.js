@@ -388,20 +388,25 @@ function showLowVolumeToast(pasienName, lokasi, vol, pct, deviceId) {
 // ===== TPM ALERT SYSTEM ==============================
 // =====================================================
 
-// Track devices whose TPM is abnormal (0 = clogged, >80 = too fast)
+// Track devices whose TPM is abnormal (0 = clogged, < min = too slow, > max = too fast)
 const tpmZeroSince = new Map();  // deviceId → timestamp first detected
-const tpmAlertedSet = new Set();  // deviceId → already alerted
+const tpmAlertedSet = new Set();  // deviceId → already alerted (clogged)
 const tpmHighAlerted = new Set();  // deviceId → high-TPM already alerted
+const tpmLowAlerted = new Set();   // deviceId → low-TPM already alerted
 
 function clearTpmZeroToast(deviceId) { removeToast('tpm-toast-' + deviceId); }
 
 function showTpmToast(pasienName, lokasi, toastKey, message, color) {
   const isPurple = color === 'purple';
+  const isRose   = color === 'rose';
+  const bg = isPurple ? '#faf5ff' : (isRose ? '#fff1f2' : '#fffbeb');
+  const border = isPurple ? '#c084fc' : (isRose ? '#fda4af' : '#fcd34d');
+  const text = isPurple ? '#9333ea' : (isRose ? '#e11d48' : '#d97706');
   const html = toastHTML(
     'speedometer2',
-    isPurple ? '#faf5ff' : '#fffbeb',
-    isPurple ? '#c084fc' : '#fcd34d',
-    isPurple ? '#9333ea' : '#d97706',
+    bg,
+    border,
+    text,
     'TPM Warning',
     escHtml(pasienName),
     escHtml(message),
@@ -418,30 +423,50 @@ function speakTpmAlert(pasienName, lokasi, message) {
   withAudio(() => speak(`Perhatian. Pasien ${pasienName}${lokasiText}. ${message}`));
 }
 
-function handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, online) {
+function handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, online, targetTpm = 20, tpmTol = 5) {
   const t = parseFloat(tpm) || 0;
   const vol = parseFloat(volumeSisa) || 0;
+  const tgt = parseInt(targetTpm) || 20;
+  const tol = parseInt(tpmTol) || 5;
+  const minTpm = Math.max(1, tgt - tol);
+  const maxTpm = tgt + tol;
 
   // ── Clear all TPM alerts when offline ──
   if (!online) {
     tpmZeroSince.delete(deviceId);
     tpmAlertedSet.delete(deviceId);
     tpmHighAlerted.delete(deviceId);
+    tpmLowAlerted.delete(deviceId);
     clearTpmZeroToast(deviceId);
+    removeToast('tpm-toast-' + deviceId + '-high');
+    removeToast('tpm-toast-' + deviceId + '-low');
     return;
   }
 
-  // ── HIGH TPM alert (>80 tpm = too fast) ──
-  if (t > 80 && vol > 0) {
+  // ── HIGH TPM alert (> maxTpm = too fast) ──
+  if (t > maxTpm && vol > 0) {
     if (!tpmHighAlerted.has(deviceId)) {
       tpmHighAlerted.add(deviceId);
-      const msg = `Tetesan infus terlalu cepat: ${Math.round(t)} tpm. Harap periksa segera.`;
-      showTpmToast(pasienName, lokasi, deviceId + '-high', msg, 'amber');
+      const msg = `Tetesan infus terlalu cepat: ${Math.round(t)} TPM (Target: ${tgt} ± ${tol} TPM). Harap periksa segera.`;
+      showTpmToast(pasienName, lokasi, deviceId + '-high', msg, 'rose');
       speakTpmAlert(pasienName, lokasi, `Tetesan infus terlalu cepat, ${Math.round(t)} tetes per menit. Harap periksa segera.`);
     }
-    return;
   } else {
     tpmHighAlerted.delete(deviceId);
+    removeToast('tpm-toast-' + deviceId + '-high');
+  }
+
+  // ── LOW TPM alert (>0 but < minTpm = too slow) ──
+  if (t > 0 && t < minTpm && vol > 0) {
+    if (!tpmLowAlerted.has(deviceId)) {
+      tpmLowAlerted.add(deviceId);
+      const msg = `Tetesan infus terlalu lambat: ${Math.round(t)} TPM (Target: ${tgt} ± ${tol} TPM). Harap periksa klem infus.`;
+      showTpmToast(pasienName, lokasi, deviceId + '-low', msg, 'amber');
+      speakTpmAlert(pasienName, lokasi, `Tetesan infus terlalu lambat, ${Math.round(t)} tetes per menit. Harap periksa klem infus.`);
+    }
+  } else {
+    tpmLowAlerted.delete(deviceId);
+    removeToast('tpm-toast-' + deviceId + '-low');
   }
 
   // ── LOW / ZERO TPM alert (=0 with fluid remaining = clogged) ──
@@ -453,12 +478,12 @@ function handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, onlin
     const elapsed = Date.now() - tpmZeroSince.get(deviceId);
     if (elapsed >= 10000 && !tpmAlertedSet.has(deviceId)) {
       tpmAlertedSet.add(deviceId);
-      const msg = `Infus kemungkinan macet (0 tpm). Sisa cairan ${Math.round(vol)} ml. Harap periksa segera.`;
+      const msg = `Infus kemungkinan macet (0 TPM). Sisa cairan ${Math.round(vol)} ml. Harap periksa segera.`;
       showTpmToast(pasienName, lokasi, deviceId, msg, 'purple');
       speakTpmAlert(pasienName, lokasi, `Infus macet. Sisa cairan ${Math.round(vol)} mililiter. Harap periksa segera.`);
     }
   } else {
-    // TPM normal — clear state
+    // TPM normal — clear zero state
     tpmZeroSince.delete(deviceId);
     tpmAlertedSet.delete(deviceId);
     clearTpmZeroToast(deviceId);
@@ -591,6 +616,11 @@ function updateCard(dev) {
   const tpmEl = card.querySelector('[data-role="tpm-value"]');
   if (tpmEl) tpmEl.textContent = Math.round(tpm);
 
+  const targetLabel = card.querySelector('[data-role="target-tpm-label"]');
+  if (targetLabel && dev.target_tpm !== undefined) {
+    targetLabel.textContent = `Target: ${dev.target_tpm} ± ${dev.tpm_tolerance || 5}`;
+  }
+
   const estEl = card.querySelector('[data-role="estimasi-value"]');
   if (estEl) {
     if (online && tpm === 0 && volumeSisa > 0) {
@@ -671,7 +701,7 @@ function updateCard(dev) {
 
   handleNurseCallState(dev.device_id, nurseCall, pasienName, lokasi, online);
   handleLowVolumeAlert(dev.device_id, persen, volumeSisa, pasienName, lokasi, online);
-  handleTpmZeroAlert(dev.device_id, tpm, volumeSisa, pasienName, lokasi, online);
+  handleTpmZeroAlert(dev.device_id, tpm, volumeSisa, pasienName, lokasi, online, dev.target_tpm, dev.tpm_tolerance);
 }
 
 // =====================================================

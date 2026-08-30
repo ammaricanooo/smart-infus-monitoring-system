@@ -57,6 +57,8 @@ function fetchSnapshot(PDO $db): array
     $rows = $db->query("
         SELECT
             d.device_id, d.nama, d.lokasi, d.pasien,
+            COALESCE(d.target_tpm, 20) AS target_tpm,
+            COALESCE(d.tpm_tolerance, 5) AS tpm_tolerance,
             d.created_at AS device_created_at,
             i.tpm, i.volume_sisa, i.volume_awal, i.persen,
             i.estimasi_jam, i.estimasi_mnt, i.total_tetes,
@@ -90,6 +92,10 @@ function fetchSnapshot(PDO $db): array
         }
         
         $r['is_online'] = $isOnline;
+        $tgt = (int)$r['target_tpm'];
+        $tol = (int)$r['tpm_tolerance'];
+        $r['tpm_min'] = max(1, $tgt - $tol);
+        $r['tpm_max'] = $tgt + $tol;
     }
     unset($r);
 

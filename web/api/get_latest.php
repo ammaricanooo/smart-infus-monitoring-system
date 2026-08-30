@@ -32,6 +32,8 @@ if ($device_id) {
             d.nama,
             d.lokasi,
             d.pasien,
+            COALESCE(d.target_tpm, 20) AS target_tpm,
+            COALESCE(d.tpm_tolerance, 5) AS tpm_tolerance,
             i.tpm,
             i.volume_sisa,
             i.volume_awal,
@@ -62,6 +64,10 @@ if ($device_id) {
             $isOnline = (time() - strtotime($result['created_at'])) < 30;
         }
         $result['is_online'] = $isOnline;
+        $tgt = (int)$result['target_tpm'];
+        $tol = (int)$result['tpm_tolerance'];
+        $result['tpm_min'] = max(1, $tgt - $tol);
+        $result['tpm_max'] = $tgt + $tol;
     }
 
     echo json_encode([
@@ -78,6 +84,8 @@ if ($device_id) {
             d.nama,
             d.lokasi,
             d.pasien,
+            COALESCE(d.target_tpm, 20) AS target_tpm,
+            COALESCE(d.tpm_tolerance, 5) AS tpm_tolerance,
             i.tpm,
             i.volume_sisa,
             i.volume_awal,
@@ -108,6 +116,10 @@ if ($device_id) {
             $isOnline = (time() - strtotime($row['created_at'])) < 30;
         }
         $row['is_online'] = $isOnline;
+        $tgt = (int)$row['target_tpm'];
+        $tol = (int)$row['tpm_tolerance'];
+        $row['tpm_min'] = max(1, $tgt - $tol);
+        $row['tpm_max'] = $tgt + $tol;
     }
     unset($row);
 

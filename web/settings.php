@@ -43,12 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $provider = in_array($_POST['wa_provider'] ?? '', ['custom', 'fonnte']) ? $_POST['wa_provider'] : 'custom';
         setSetting('wa_provider', $provider);
 
-        // Simpan konfigurasi kedua provider sekaligus
-        foreach (['wa_api_url', 'wa_api_key', 'fonnte_token', 'iot_api_key', 'app_url'] as $f) {
+        // Simpan konfigurasi gateway, keamanan, dan default klinis TPM
+        foreach (['wa_api_url', 'wa_api_key', 'fonnte_token', 'iot_api_key', 'app_url', 'default_target_tpm', 'default_tpm_tolerance'] as $f) {
             if (isset($_POST[$f])) setSetting($f, trim($_POST[$f]));
         }
         setSetting('login_required', isset($_POST['login_required']) ? '1' : '0');
-        $message = 'Konfigurasi koneksi & keamanan berhasil disimpan!';
+        $message = 'Konfigurasi koneksi, parameter klinis, & keamanan berhasil disimpan!';
     }
 
     elseif ($action === 'save_retention') {
@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'wa_nurse_call_msg_suster', 'wa_nurse_call_msg_keluarga',
             'wa_low_volume_msg_suster', 'wa_low_volume_msg_keluarga',
             'wa_tpm_zero_msg_suster',   'wa_tpm_zero_msg_keluarga',
+            'wa_tpm_low_msg_suster',    'wa_tpm_low_msg_keluarga',
             'wa_tpm_high_msg_suster',   'wa_tpm_high_msg_keluarga',
             'wa_resolved_msg_keluarga', 'wa_resolved_msg_suster',
             'wa_welcome_keluarga',
@@ -196,12 +197,17 @@ if (empty($waProvider) && !empty($fonnte_token) && empty($apiUrl)) {
 }
 $loginRequired = $settings['login_required'] ?? '0';
 
+$defaultTargetTpm    = $settings['default_target_tpm']    ?? '20';
+$defaultTpmTolerance = $settings['default_tpm_tolerance'] ?? '5';
+
 $msgNCSuster    = $settings['wa_nurse_call_msg_suster']   ?? '';
 $msgNCKeluarga  = $settings['wa_nurse_call_msg_keluarga'] ?? '';
 $msgLVSuster    = $settings['wa_low_volume_msg_suster']   ?? '';
 $msgLVKeluarga  = $settings['wa_low_volume_msg_keluarga'] ?? '';
 $msgTPMSuster   = $settings['wa_tpm_zero_msg_suster']     ?? '';
 $msgTPMKeluarga = $settings['wa_tpm_zero_msg_keluarga']   ?? '';
+$msgTPMLSuster  = $settings['wa_tpm_low_msg_suster']      ?? '';
+$msgTPMLKeluarga= $settings['wa_tpm_low_msg_keluarga']    ?? '';
 $msgTPMHSuster  = $settings['wa_tpm_high_msg_suster']     ?? '';
 $msgTPMHKeluarga= $settings['wa_tpm_high_msg_keluarga']   ?? '';
 $msgOKKeluarga  = $settings['wa_resolved_msg_keluarga']   ?? '';
@@ -532,10 +538,48 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
               </div>
             </div>
 
+            <!-- Section: Parameter Standar Klinis Infus (Global Default) -->
+            <div class="p-5 border-b border-slate-100 bg-sky-50/20">
+              <h2 class="text-xs font-black text-slate-900 tracking-wider uppercase flex items-center gap-2 mb-4">
+                <div class="w-7 h-7 bg-sky-50 text-sky-600 rounded-lg flex items-center justify-center border border-sky-100 shrink-0">
+                  <i class="bi bi-droplet-half text-sm"></i>
+                </div>
+                Standar Laju Infus Medis (Global Baseline)
+              </h2>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
+                    <i class="bi bi-speedometer2 text-sky-600 mr-1"></i> Default Target TPM
+                  </label>
+                  <div class="relative">
+                    <input type="number" name="default_target_tpm" min="1" max="250"
+                           value="<?= esc($defaultTargetTpm) ?>"
+                           class="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none transition-all focus:ring-4 focus:ring-sky-500/10" />
+                    <span class="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">TPM</span>
+                  </div>
+                  <div class="text-[9px] text-slate-400 mt-1">Laju tetesan standar jika tidak dispesifikasikan per pasien.</div>
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1.5">
+                    <i class="bi bi-arrows-expand text-sky-600 mr-1"></i> Default Toleransi (±)
+                  </label>
+                  <div class="relative">
+                    <input type="number" name="default_tpm_tolerance" min="0" max="100"
+                           value="<?= esc($defaultTpmTolerance) ?>"
+                           class="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 outline-none transition-all focus:ring-4 focus:ring-sky-500/10" />
+                    <span class="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400">TPM</span>
+                  </div>
+                  <div class="text-[9px] text-slate-400 mt-1">Rentang deviasi aman sebelum peringatan lambat/cepat dikirim.</div>
+                </div>
+              </div>
+            </div>
+
             <!-- Save Button -->
             <div class="p-5">
               <button type="submit" style="background:#6b2072;color:#fff;" class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-white rounded-xl text-xs font-bold tracking-wide shadow-md active:scale-[0.99] transition-all cursor-pointer hover:opacity-90">
-                <i class="bi bi-save2-fill"></i> SIMPAN KONEKSI & KEAMANAN
+                <i class="bi bi-save2-fill"></i> SIMPAN KONEKSI, PARAMETER & KEAMANAN
               </button>
             </div>
           </form>
@@ -950,11 +994,19 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
         ); ?>
 
         <?php templateBlock(
-            'tpm_high', 'amber', 'amber-600', 'amber', 'amber',
-            'speedometer2', '⚡ TPM Terlalu Cepat — > 80',
+            'tpm_low', 'amber', 'amber-600', 'amber', 'amber',
+            'arrow-down-circle-fill', '⚠️ TPM Terlalu Lambat — Di Bawah Target Pasien',
+            'wa_tpm_low_msg_suster', $msgTPMLSuster,
+            'wa_tpm_low_msg_keluarga', $msgTPMLKeluarga,
+            ['{pasien}','{lokasi}','{tpm}','{target_tpm}','{tpm_tol}','{waktu}']
+        ); ?>
+
+        <?php templateBlock(
+            'tpm_high', 'rose', 'rose-600', 'rose', 'rose',
+            'speedometer2', '⚡ TPM Terlalu Cepat — Di Atas Target Pasien',
             'wa_tpm_high_msg_suster', $msgTPMHSuster,
             'wa_tpm_high_msg_keluarga', $msgTPMHKeluarga,
-            ['{pasien}','{lokasi}','{tpm}','{waktu}']
+            ['{pasien}','{lokasi}','{tpm}','{target_tpm}','{tpm_tol}','{waktu}']
         ); ?>
 
         <!-- Resolved — Suster + Keluarga -->
@@ -1074,7 +1126,7 @@ if (!in_array($activeTab, ['gateway', 'database', 'templates'])) $activeTab = 'g
     }
 
     // ── Accordion toggles ──
-    const accordionIds = ['nurse_call', 'low_vol', 'tpm_zero', 'tpm_high', 'resolved', 'welcome'];
+    const accordionIds = ['nurse_call', 'low_vol', 'tpm_zero', 'tpm_low', 'tpm_high', 'resolved', 'welcome'];
 
     function toggleAccordion(id) {
       const body = document.getElementById('body-' + id);

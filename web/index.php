@@ -12,6 +12,8 @@ $db = getDB();
 $stmt = $db->query("
     SELECT
         d.id, d.device_id, d.nama, d.lokasi, d.pasien,
+        COALESCE(d.target_tpm, 20) AS target_tpm,
+        COALESCE(d.tpm_tolerance, 5) AS tpm_tolerance,
         i.tpm, i.volume_sisa, i.volume_awal, i.persen,
         i.estimasi_jam, i.estimasi_mnt, i.total_tetes,
         i.nurse_call, i.mode, i.created_at AS last_update
@@ -470,18 +472,29 @@ $activePage = 'dashboard';
 
             <!-- Precise Quantities (TPM & Volume Metrics) -->
             <div class="grid grid-cols-2 gap-3 mb-4">
-              <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
-                <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Flow Rate</span>
-                <div class="text-xl font-black text-slate-900 mt-0.5">
-                  <span data-role="tpm-value"><?= number_format($dev['tpm'] ?? 0) ?></span>
-                  <span class="text-xs font-medium text-slate-400">TPM</span>
+              <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center flex flex-col justify-between">
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Flow Rate</span>
+                  <div class="text-xl font-black text-slate-900 mt-0.5">
+                    <span data-role="tpm-value"><?= number_format($dev['tpm'] ?? 0) ?></span>
+                    <span class="text-xs font-medium text-slate-400">TPM</span>
+                  </div>
+                </div>
+                <div class="mt-1 pt-1 border-t border-slate-200/40">
+                  <span data-role="target-tpm-label" class="text-[9px] font-bold text-slate-400 block">
+                    Target: <?= (int)($dev['target_tpm'] ?? 20) ?> ± <?= (int)($dev['tpm_tolerance'] ?? 5) ?>
+                  </span>
                 </div>
               </div>
-              <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center">
-                <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Sisa Cairan</span>
-                <!-- SESUDAH (BIARKAN SEPERTI INI DI INDEX.PHP) -->
-                <div class="text-xl font-black text-slate-900 mt-0.5">
-                  <span data-role="volume-display"><?= number_format($dev['volume_sisa'] ?? 0) ?></span><span class="text-xs font-medium text-slate-400">/<?= number_format($dev['volume_awal'] ?? 0) ?>mL</span>
+              <div class="bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 text-center flex flex-col justify-between">
+                <div>
+                  <span class="text-[9px] font-bold text-slate-400 tracking-wider uppercase block">Sisa Cairan</span>
+                  <div class="text-xl font-black text-slate-900 mt-0.5">
+                    <span data-role="volume-display"><?= number_format($dev['volume_sisa'] ?? 0) ?></span><span class="text-xs font-medium text-slate-400">/<?= number_format($dev['volume_awal'] ?? 0) ?>mL</span>
+                  </div>
+                </div>
+                <div class="mt-1 pt-1 border-t border-slate-200/40">
+                  <span class="text-[9px] font-bold text-slate-400 block">Kapasitas Sisa</span>
                 </div>
               </div>
             </div>

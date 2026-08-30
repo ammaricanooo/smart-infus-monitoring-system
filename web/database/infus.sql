@@ -13,15 +13,18 @@ USE `smart_infus`;
 -- =====================================================
 
 CREATE TABLE IF NOT EXISTS `devices` (
-  `id`           INT(11)      NOT NULL AUTO_INCREMENT,
-  `device_id`    VARCHAR(50)  NOT NULL UNIQUE,
-  `nama`         VARCHAR(100) NOT NULL DEFAULT 'Infus',
-  `lokasi`       VARCHAR(100) NOT NULL DEFAULT '-',
-  `pasien`       VARCHAR(100) NOT NULL DEFAULT '-',
-  `no_suster`    VARCHAR(20)  NOT NULL DEFAULT '',
-  `no_keluarga`  VARCHAR(20)  NOT NULL DEFAULT '',
-  `aktif`        TINYINT(1)   NOT NULL DEFAULT 1,
-  `created_at`   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `id`            INT(11)      NOT NULL AUTO_INCREMENT,
+  `device_id`     VARCHAR(50)  NOT NULL UNIQUE,
+  `nama`          VARCHAR(100) NOT NULL DEFAULT 'Infus',
+  `lokasi`        VARCHAR(100) NOT NULL DEFAULT '-',
+  `pasien`        VARCHAR(100) NOT NULL DEFAULT '-',
+  `target_tpm`    INT(11)      NOT NULL DEFAULT 20,
+  `tpm_tolerance` INT(11)      NOT NULL DEFAULT 5,
+  `no_suster`     VARCHAR(20)  NOT NULL DEFAULT '',
+  `no_keluarga`   VARCHAR(20)  NOT NULL DEFAULT '',
+  `family_token`  VARCHAR(64)  NOT NULL DEFAULT '',
+  `aktif`         TINYINT(1)   NOT NULL DEFAULT 1,
+  `created_at`    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -39,14 +42,18 @@ CREATE TABLE IF NOT EXISTS `settings` (
 
 -- Data default settings
 INSERT IGNORE INTO `settings` (`key_name`, `key_value`) VALUES
-  ('wa_api_url',          ''),
-  ('wa_api_key',          ''),
-  ('fonnte_token',        ''),
-  ('wa_nurse_call_msg',   'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
-  ('wa_low_volume_msg',   'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.'),
-  ('wa_tpm_zero_msg',     'INFUS MACET 🔴\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml\nWaktu: {waktu}\n\nTidak ada tetesan terdeteksi. Periksa selang atau jarum infus segera.'),
-  ('wa_tpm_high_msg',     'TPM TERLALU CEPAT ⚡\nPasien: {pasien}\nLokasi: {lokasi}\nTPM saat ini: {tpm} tetes/menit\nWaktu: {waktu}\n\nKecepatan tetesan infus terlalu cepat. Harap periksa dan sesuaikan pengaturan.'),
-  ('wa_resolved_msg',     'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.');
+  ('wa_api_url',               ''),
+  ('wa_api_key',               ''),
+  ('fonnte_token',             ''),
+  ('default_target_tpm',       '20'),
+  ('default_tpm_tolerance',    '5'),
+  ('wa_nurse_call_msg',        'NURSE CALL 🚨\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nSegera menuju lokasi pasien.'),
+  ('wa_low_volume_msg',        'PERINGATAN INFUS ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml ({persen}%)\nWaktu: {waktu}\n\nSegera ganti kantong infus.'),
+  ('wa_tpm_zero_msg',          'INFUS MACET 🔴\nPasien: {pasien}\nLokasi: {lokasi}\nSisa cairan: {volume} ml\nWaktu: {waktu}\n\nTidak ada tetesan terdeteksi. Periksa selang atau jarum infus segera.'),
+  ('wa_tpm_low_msg_suster',    'TPM TERLALU LAMBAT ⚠️\nPasien: {pasien}\nLokasi: {lokasi}\nTPM saat ini: {tpm} tetes/menit (Target: {target_tpm} ± {tpm_tol})\nWaktu: {waktu}\n\nTetesan infus berada di bawah batas aman. Harap periksa klem infus.'),
+  ('wa_tpm_low_msg_keluarga',  'INFO INFUS ℹ️\nPasien: {pasien}\nLokasi: {lokasi}\nKecepatan tetesan saat ini {tpm} TPM (di bawah target {target_tpm} TPM).\nWaktu: {waktu}\n\nPetugas medis telah diinformasikan untuk penyesuaian.'),
+  ('wa_tpm_high_msg',          'TPM TERLALU CEPAT ⚡\nPasien: {pasien}\nLokasi: {lokasi}\nTPM saat ini: {tpm} tetes/menit (Target: {target_tpm} ± {tpm_tol})\nWaktu: {waktu}\n\nKecepatan tetesan infus terlalu cepat. Harap periksa dan sesuaikan pengaturan.'),
+  ('wa_resolved_msg',          'KONDISI NORMAL ✅\nPasien: {pasien}\nLokasi: {lokasi}\nWaktu: {waktu}\n\nKabar baik! {resolved_label}. Tidak perlu khawatir.');
 
 -- =====================================================
 -- TABLE: infus_data (data realtime dari ESP32)

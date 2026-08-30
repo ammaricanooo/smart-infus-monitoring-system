@@ -70,6 +70,12 @@ $estJam     = $latest['estimasi_jam'] ?? 0;
 $estMnt     = $latest['estimasi_mnt'] ?? 0;
 $lastUpdate = $latest['created_at']   ?? null;
 $isOnline   = $lastUpdate && (strtotime($lastUpdate) >= time() - 30);
+
+$targetTpm  = (int)($device['target_tpm'] ?? 20);
+$tpmTol     = (int)($device['tpm_tolerance'] ?? 5);
+$tpmMin     = max(1, $targetTpm - $tpmTol);
+$tpmMax     = $targetTpm + $tpmTol;
+
 $activePage = 'dashboard';
 ?>
 <!DOCTYPE html>
@@ -90,7 +96,9 @@ $activePage = 'dashboard';
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col selection:bg-[#6b2072]/10 selection:text-[#6b2072] font-sans antialiased"
   data-detail-pasien="<?= htmlspecialchars($device['pasien']) ?>"
-  data-detail-lokasi="<?= htmlspecialchars($device['lokasi']) ?>">
+  data-detail-lokasi="<?= htmlspecialchars($device['lokasi']) ?>"
+  data-target-tpm="<?= $targetTpm ?>"
+  data-tpm-tol="<?= $tpmTol ?>">
 
   <?php require __DIR__ . '/config/navbar.php'; ?>
 
@@ -108,6 +116,9 @@ $activePage = 'dashboard';
             </span>
             <span class="text-xs font-medium text-slate-400 flex items-center gap-1 font-mono">
               <i class="bi bi-cpu-fill text-slate-300"></i><?= htmlspecialchars($device['device_id']) ?>
+            </span>
+            <span class="inline-flex items-center gap-1 text-xs font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+              <i class="bi bi-speedometer2 text-sky-600"></i>Target: <?= $targetTpm ?> ± <?= $tpmTol ?> TPM
             </span>
           </div>
         </div>
@@ -149,12 +160,20 @@ $activePage = 'dashboard';
 
         <!-- Card TPM -->
         <div class="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-          <div class="w-10 h-10 bg-red-50 border border-red-100 text-red-500 rounded-xl flex items-center justify-center text-base">
-            <i class="bi bi-droplet-half"></i>
+          <div class="flex items-center justify-between">
+            <div class="w-10 h-10 bg-red-50 border border-red-100 text-red-500 rounded-xl flex items-center justify-center text-base">
+              <i class="bi bi-droplet-half"></i>
+            </div>
+            <span id="d-tpm-badge" class="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+              Target: <?= $targetTpm ?> ± <?= $tpmTol ?>
+            </span>
           </div>
           <div class="mt-4">
             <div id="d-tpm" class="text-4xl font-black text-slate-900 tracking-tight"><?= number_format($tpm,0) ?></div>
-            <div class="text-[10px] font-black text-red-600 uppercase tracking-widest mt-1">Tetes Per Menit (TPM)</div>
+            <div class="text-[10px] font-black text-red-600 uppercase tracking-widest mt-1 flex items-center justify-between">
+              <span>Tetes Per Menit (TPM)</span>
+              <span id="d-tpm-range" class="text-slate-400 font-mono text-[9px] font-semibold">Rentang: <?= $tpmMin ?>–<?= $tpmMax ?></span>
+            </div>
           </div>
         </div>
 

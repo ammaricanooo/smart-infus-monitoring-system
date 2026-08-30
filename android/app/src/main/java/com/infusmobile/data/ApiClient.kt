@@ -77,6 +77,8 @@ private fun parseDevice(json: JSONObject): Device {
         nama = json.optString("nama"),
         lokasi = json.optString("lokasi"),
         pasien = json.optString("pasien"),
+        targetTpm = json.optInt("target_tpm", 20),
+        tpmTolerance = json.optInt("tpm_tolerance", 5),
         tpm = json.optInt("tpm"),
         volumeSisa = json.optInt("volume_sisa"),
         volumeAwal = json.optInt("volume_awal"),

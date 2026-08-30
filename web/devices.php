@@ -56,13 +56,15 @@ function sendFamilyWelcome(PDO $db, string $device_id, string $no_keluarga): voi
 
 // --- FORM CONTROLLER (POST BUSINESS LOGIC) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action      = $_POST['action'] ?? '';
-    $device_id   = trim($_POST['device_id'] ?? '');
-    $nama        = trim($_POST['nama'] ?? '');
-    $lokasi      = trim($_POST['lokasi'] ?? '');
-    $pasien      = trim($_POST['pasien'] ?? '');
-    $no_suster   = preg_replace('/\D/', '', $_POST['no_suster'] ?? '');
-    $no_keluarga = preg_replace('/\D/', '', $_POST['no_keluarga'] ?? '');
+    $action        = $_POST['action'] ?? '';
+    $device_id     = trim($_POST['device_id'] ?? '');
+    $nama          = trim($_POST['nama'] ?? '');
+    $lokasi        = trim($_POST['lokasi'] ?? '');
+    $pasien        = trim($_POST['pasien'] ?? '');
+    $target_tpm    = isset($_POST['target_tpm']) ? max(1, (int)$_POST['target_tpm']) : (int)getSetting('default_target_tpm', '20');
+    $tpm_tolerance = isset($_POST['tpm_tolerance']) ? max(0, (int)$_POST['tpm_tolerance']) : (int)getSetting('default_tpm_tolerance', '5');
+    $no_suster     = preg_replace('/\D/', '', $_POST['no_suster'] ?? '');
+    $no_keluarga   = preg_replace('/\D/', '', $_POST['no_keluarga'] ?? '');
 
     if ($action === 'add' && $device_id && $nama) {
         $check = $db->prepare("SELECT id FROM devices WHERE device_id = :id");
@@ -76,17 +78,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $family_token = bin2hex(random_bytes(16));
 
             $stmt = $db->prepare("
-                INSERT INTO devices (device_id, nama, lokasi, pasien, no_suster, no_keluarga, family_token)
-                VALUES (:device_id, :nama, :lokasi, :pasien, :no_suster, :no_keluarga, :family_token)
+                INSERT INTO devices (device_id, nama, lokasi, pasien, target_tpm, tpm_tolerance, no_suster, no_keluarga, family_token)
+                VALUES (:device_id, :nama, :lokasi, :pasien, :target_tpm, :tpm_tolerance, :no_suster, :no_keluarga, :family_token)
             ");
             $stmt->execute([
-                ':device_id'    => $device_id,
-                ':nama'         => $nama,
-                ':lokasi'       => $lokasi,
-                ':pasien'       => $pasien,
-                ':no_suster'    => $no_suster,
-                ':no_keluarga'  => $no_keluarga,
-                ':family_token' => $family_token,
+                ':device_id'     => $device_id,
+                ':nama'          => $nama,
+                ':lokasi'        => $lokasi,
+                ':pasien'        => $pasien,
+                ':target_tpm'    => $target_tpm,
+                ':tpm_tolerance' => $tpm_tolerance,
+                ':no_suster'     => $no_suster,
+                ':no_keluarga'   => $no_keluarga,
+                ':family_token'  => $family_token,
             ]);
             $message = "Perangkat '" . $nama . "' sukses didaftarkan!";
 
@@ -113,18 +117,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $db->prepare("
             UPDATE devices
             SET nama = :nama, lokasi = :lokasi, pasien = :pasien,
+                target_tpm = :target_tpm, tpm_tolerance = :tpm_tolerance,
                 no_suster = :no_suster, no_keluarga = :no_keluarga,
                 family_token = :family_token
             WHERE device_id = :device_id
         ");
         $stmt->execute([
-            ':device_id'    => $device_id,
-            ':nama'         => $nama,
-            ':lokasi'       => $lokasi,
-            ':pasien'       => $pasien,
-            ':no_suster'    => $no_suster,
-            ':no_keluarga'  => $no_keluarga,
-            ':family_token' => $prevToken,
+            ':device_id'     => $device_id,
+            ':nama'          => $nama,
+            ':lokasi'        => $lokasi,
+            ':pasien'        => $pasien,
+            ':target_tpm'    => $target_tpm,
+            ':tpm_tolerance' => $tpm_tolerance,
+            ':no_suster'     => $no_suster,
+            ':no_keluarga'   => $no_keluarga,
+            ':family_token'  => $prevToken,
         ]);
         $message = "Data perangkat '" . $nama . "' berhasil diperbarui!";
 
@@ -250,6 +257,53 @@ $activePage = 'devices';
             </div>
           </div>
 
+          <!-- CLINICAL INFUSION PARAMETER DIVIDER -->
+          <div class="flex items-center gap-3 my-1">
+            <div class="flex-1 h-px bg-slate-200"></div>
+            <span class="text-[9px] font-bold text-slate-400 tracking-widest uppercase flex items-center gap-1">
+              <i class="bi bi-droplet-half text-sky-500"></i> Parameter Resep TPM
+            </span>
+            <div class="flex-1 h-px bg-slate-200"></div>
+          </div>
+
+          <!-- Input: Target TPM & Toleransi -->
+          <?php
+            $defaultTgt = (int)getSetting('default_target_tpm', '20');
+            $defaultTol = (int)getSetting('default_tpm_tolerance', '5');
+            $curTgt     = isset($editDevice['target_tpm']) ? (int)$editDevice['target_tpm'] : $defaultTgt;
+            $curTol     = isset($editDevice['tpm_tolerance']) ? (int)$editDevice['tpm_tolerance'] : $defaultTol;
+          ?>
+          <div class="bg-sky-50/50 border border-sky-100 rounded-xl p-3.5 flex flex-col gap-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1 flex items-center gap-1">
+                  <i class="bi bi-speedometer2 text-sky-600"></i> Target TPM
+                </label>
+                <div class="relative">
+                  <input type="number" name="target_tpm" id="inp_target_tpm" min="1" max="250" placeholder="20" 
+                         class="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-sky-500/10"
+                         value="<?= $curTgt ?>" required oninput="calcTpmRange()" />
+                  <span class="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400">TPM</span>
+                </div>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 tracking-wider uppercase mb-1 flex items-center gap-1">
+                  <i class="bi bi-arrows-expand text-sky-600"></i> Toleransi (±)
+                </label>
+                <div class="relative">
+                  <input type="number" name="tpm_tolerance" id="inp_tpm_tol" min="0" max="100" placeholder="5" 
+                         class="w-full bg-white border border-slate-200 focus:border-sky-500 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 outline-none transition-all focus:ring-2 focus:ring-sky-500/10"
+                         value="<?= $curTol ?>" required oninput="calcTpmRange()" />
+                  <span class="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400">TPM</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-[10px] font-bold text-sky-700 bg-white/80 border border-sky-100 rounded-lg px-2.5 py-1.5">
+              <span>Rentang Aman Normal:</span>
+              <span id="lbl_tpm_range" class="font-black font-mono">-- s/d -- TPM</span>
+            </div>
+          </div>
+
           <!-- WHATSAPP INTEGRATION DIVIDER -->
           <div class="flex items-center gap-3 my-1">
             <div class="flex-1 h-px bg-slate-200"></div>
@@ -310,14 +364,14 @@ $activePage = 'devices';
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse min-w-[760px]">
             <thead>
               <tr class="bg-slate-50/70 border-b border-slate-200 text-[10px] font-bold text-slate-400 tracking-wider uppercase">
-                <th class="py-3.5 px-5">Device &amp; Bangsal</th>
-                <th class="py-3.5 px-5">Pasien Aktif</th>
-                <th class="py-3.5 px-5">Notifikasi Alur</th>
-                <th class="py-3.5 px-4 text-center">Data Log</th>
-                <th class="py-3.5 px-5 text-right">Aksi</th>
+                <th class="py-3.5 px-5 whitespace-nowrap min-w-[200px]">Device &amp; Bangsal</th>
+                <th class="py-3.5 px-5 whitespace-nowrap min-w-[220px]">Pasien &amp; Target TPM</th>
+                <th class="py-3.5 px-5 whitespace-nowrap min-w-[170px]">Notifikasi Alur</th>
+                <th class="py-3.5 px-4 text-center whitespace-nowrap min-w-[90px]">Data Log</th>
+                <th class="py-3.5 px-5 text-right whitespace-nowrap min-w-[120px]">Aksi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
@@ -331,11 +385,15 @@ $activePage = 'devices';
                 }
                 $hasSuster   = !empty(trim($dev['no_suster'] ?? ''));
                 $hasKeluarga = !empty(trim($dev['no_keluarga'] ?? ''));
+                $devTgt      = (int)($dev['target_tpm'] ?? 20);
+                $devTol      = (int)($dev['tpm_tolerance'] ?? 5);
+                $devMin      = max(1, $devTgt - $devTol);
+                $devMax      = $devTgt + $devTol;
               ?>
               <tr class="hover:bg-slate-50/60 transition-colors">
                 
                 <!-- Col: Device & Location -->
-                <td class="py-4 px-5">
+                <td class="py-4 px-5 whitespace-nowrap">
                   <div class="flex items-center gap-3">
                     <div class="w-9 h-9 border rounded-xl flex items-center justify-center flex-shrink-0 <?= $isOnline ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-slate-100 border-slate-200 text-slate-400' ?>">
                       <i class="bi bi-broadcast text-sm <?= $isOnline ? 'animate-pulse' : '' ?>"></i>
@@ -350,9 +408,16 @@ $activePage = 'devices';
                   </div>
                 </td>
 
-                <!-- Col: Patient -->
-                <td class="py-4 px-5">
+                <!-- Col: Patient & Target TPM -->
+                <td class="py-4 px-5 whitespace-nowrap">
                   <div class="font-bold text-slate-800"><?= esc($dev['pasien'] ?: '— Kosong —') ?></div>
+                  <div class="flex items-center gap-1.5 mt-1">
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200/80 px-2 py-0.5 rounded-md">
+                      <i class="bi bi-droplet-half text-[9px]"></i>
+                      <span>Target: <?= $devTgt ?> ± <?= $devTol ?> TPM</span>
+                      <span class="text-slate-400 text-[9px]">(<?= $devMin ?>–<?= $devMax ?>)</span>
+                    </span>
+                  </div>
                   <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
                     <i class="bi bi-clock-history"></i>
                     <?= $dev['last_update'] ? date('H:i:s', strtotime($dev['last_update'])) : 'No signals' ?>
@@ -360,7 +425,7 @@ $activePage = 'devices';
                 </td>
 
                 <!-- Col: WA Contact Status -->
-                <td class="py-4 px-5">
+                <td class="py-4 px-5 whitespace-nowrap">
                   <div class="flex flex-col gap-1.5">
                     <div class="flex items-center gap-1.5 text-xs font-semibold <?= $hasSuster ? 'text-emerald-600' : 'text-slate-400' ?>">
                       <i class="bi bi-person-badge text-[10px]"></i>
@@ -374,13 +439,13 @@ $activePage = 'devices';
                 </td>
 
                 <!-- Col: Total Logs -->
-                <td class="py-4 px-4 text-center">
+                <td class="py-4 px-4 text-center whitespace-nowrap">
                   <div class="text-base font-black text-slate-900 tabular-nums"><?= number_format($dev['total_data']) ?></div>
                   <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Packets</span>
                 </td>
 
                 <!-- Col: Actions -->
-                <td class="py-4 px-5 text-right">
+                <td class="py-4 px-5 text-right whitespace-nowrap">
                   <div class="flex items-center justify-end gap-1.5">
                     
                     <!-- Detail View Button -->
@@ -432,6 +497,19 @@ $activePage = 'devices';
     <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">&copy; <?= date('Y') ?> Smart Infus Monitoring System &bull; Clinical Station Workspace</p>
   </footer>
 
+  <script>
+    function calcTpmRange() {
+      const tgt = parseInt(document.getElementById('inp_target_tpm')?.value) || 20;
+      const tol = parseInt(document.getElementById('inp_tpm_tol')?.value) || 0;
+      const min = Math.max(1, tgt - tol);
+      const max = tgt + tol;
+      const lbl = document.getElementById('lbl_tpm_range');
+      if (lbl) {
+        lbl.textContent = `${min} s/d ${max} TPM`;
+      }
+    }
+    calcTpmRange();
+  </script>
 
 </body>
 </html>

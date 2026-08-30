@@ -156,19 +156,45 @@ if ($nurse_call === 1) {
     $resolveStmt->execute([':device_id' => $device_id]);
 }
 
-// ── TPM tinggi (> 80 tpm) — WA sekali per sesi ──────────────────────────
-if ($tpm > 80 && $volume_sisa > 0) {
+// ── Ambil parameter klinis pasien (target_tpm & tpm_tolerance) ─────────
+$devInfoStmt = $db->prepare("SELECT target_tpm, tpm_tolerance FROM devices WHERE device_id = :id");
+$devInfoStmt->execute([':id' => $device_id]);
+$devRow = $devInfoStmt->fetch();
+
+$targetTpm    = $devRow && isset($devRow['target_tpm']) ? (int)$devRow['target_tpm'] : (int)getSetting('default_target_tpm', '20');
+$tpmTolerance = $devRow && isset($devRow['tpm_tolerance']) ? (int)$devRow['tpm_tolerance'] : (int)getSetting('default_tpm_tolerance', '5');
+$tpmMin       = max(1, $targetTpm - $tpmTolerance);
+$tpmMax       = $targetTpm + $tpmTolerance;
+
+// ── TPM tinggi (> Max TPM pasien) — WA sekali per sesi ──────────────────
+if ($tpm > $tpmMax && $volume_sisa > 0) {
     $flagKey = 'tpm_high_alerted_' . $device_id;
     if (getSetting($flagKey, '0') !== '1') {
         setSetting($flagKey, '1');
-        triggerWhatsApp($db, $device_id, 'tpm_high', $volume_sisa, $persen, $tpm);
+        triggerWhatsApp($db, $device_id, 'tpm_high', $volume_sisa, $persen, $tpm, '', $targetTpm, $tpmTolerance);
     }
 } else {
-    // Reset flag ketika TPM kembali normal
+    // Reset flag ketika TPM tidak lagi tinggi
     $flagKey = 'tpm_high_alerted_' . $device_id;
     if (getSetting($flagKey, '0') === '1') {
         setSetting($flagKey, '0');
-        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_high');
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_high', $targetTpm, $tpmTolerance);
+    }
+}
+
+// ── TPM rendah (> 0 tapi < Min TPM pasien) — WA sekali per sesi ─────────
+if ($tpm > 0 && $tpm < $tpmMin && $volume_sisa > 0) {
+    $flagKey = 'tpm_low_alerted_' . $device_id;
+    if (getSetting($flagKey, '0') !== '1') {
+        setSetting($flagKey, '1');
+        triggerWhatsApp($db, $device_id, 'tpm_low', $volume_sisa, $persen, $tpm, '', $targetTpm, $tpmTolerance);
+    }
+} else {
+    // Reset flag ketika TPM tidak lagi rendah
+    $flagKey = 'tpm_low_alerted_' . $device_id;
+    if (getSetting($flagKey, '0') === '1') {
+        setSetting($flagKey, '0');
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_low', $targetTpm, $tpmTolerance);
     }
 }
 
@@ -178,14 +204,14 @@ if ($volume_sisa > 0 && $volume_sisa <= 20) {
     $alerted  = getSetting($flagKey, '0');
     if ($alerted !== '1') {
         setSetting($flagKey, '1');
-        triggerWhatsApp($db, $device_id, 'low_volume', $volume_sisa, $persen);
+        triggerWhatsApp($db, $device_id, 'low_volume', $volume_sisa, $persen, $tpm, '', $targetTpm, $tpmTolerance);
     }
 } else {
     $flagKey = 'low_vol_alerted_' . $device_id;
     if (getSetting($flagKey, '0') === '1') {
         setSetting($flagKey, '0');
         // Volume kembali normal (infus diganti) — beri tahu keluarga saja
-        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, 0, 'low_volume');
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, 0, 'low_volume', $targetTpm, $tpmTolerance);
     }
 }
 
@@ -200,7 +226,7 @@ if ($tpm == 0 && $volume_sisa > 0) {
         $alertedKey = 'tpm_zero_alerted_' . $device_id;
         if ($elapsed >= 15 && getSetting($alertedKey, '0') !== '1') {
             setSetting($alertedKey, '1');
-            triggerWhatsApp($db, $device_id, 'tpm_zero', $volume_sisa, $persen);
+            triggerWhatsApp($db, $device_id, 'tpm_zero', $volume_sisa, $persen, $tpm, '', $targetTpm, $tpmTolerance);
         }
     }
 } else {
@@ -211,13 +237,13 @@ if ($tpm == 0 && $volume_sisa > 0) {
     if ($wasAlerted) {
         setSetting($alertedKey, '0');
         // TPM kembali normal — beri tahu keluarga saja
-        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_zero');
+        triggerWhatsApp($db, $device_id, 'resolved', $volume_sisa, $persen, $tpm, 'tpm_zero', $targetTpm, $tpmTolerance);
     }
 }
 
 // ── Helper: trigger WhatsApp ─────────────────────────────────────────────
-// $resolvedType: 'low_volume' | 'tpm_zero' | 'tpm_high' — untuk template resolved
-function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume, float $persen, float $tpm = 0, string $resolvedType = ''): void {
+// $resolvedType: 'low_volume' | 'tpm_zero' | 'tpm_low' | 'tpm_high' — untuk template resolved
+function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume, float $persen, float $tpm = 0, string $resolvedType = '', int $targetTpm = 20, int $tpmTol = 5): void {
     $s = $db->prepare("SELECT no_suster, no_keluarga FROM devices WHERE device_id = :id");
     $s->execute([':id' => $device_id]);
     $dev = $s->fetch();
@@ -235,6 +261,7 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
     $resolvedLabel = match($resolvedType) {
         'low_volume' => 'volume infus kembali normal (infus telah diganti)',
         'tpm_zero'   => 'infus kembali menetes normal',
+        'tpm_low'    => 'kecepatan tetesan kembali ke batas normal',
         'tpm_high'   => 'kecepatan tetesan kembali normal',
         default      => 'kondisi kembali normal',
     };
@@ -245,6 +272,8 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
         'volume'         => round($volume),
         'persen'         => round($persen),
         'tpm'            => round($tpm),
+        'target_tpm'     => $targetTpm,
+        'tpm_tol'        => $tpmTol,
         'waktu'          => date('d/m/Y H:i:s'),
         'device'         => $device_id,
         'resolved_label' => $resolvedLabel,
@@ -275,6 +304,7 @@ function triggerWhatsApp(PDO $db, string $device_id, string $type, float $volume
             'nurse_call' => ['suster' => 'wa_nurse_call_msg_suster',  'keluarga' => 'wa_nurse_call_msg_keluarga'],
             'low_volume' => ['suster' => 'wa_low_volume_msg_suster',   'keluarga' => 'wa_low_volume_msg_keluarga'],
             'tpm_zero'   => ['suster' => 'wa_tpm_zero_msg_suster',     'keluarga' => 'wa_tpm_zero_msg_keluarga'],
+            'tpm_low'    => ['suster' => 'wa_tpm_low_msg_suster',      'keluarga' => 'wa_tpm_low_msg_keluarga'],
             'tpm_high'   => ['suster' => 'wa_tpm_high_msg_suster',     'keluarga' => 'wa_tpm_high_msg_keluarga'],
         ];
 

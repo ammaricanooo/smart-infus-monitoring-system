@@ -477,16 +477,21 @@ function showLowVolumeToast(pasienName, lokasi, vol, pct, deviceId) {
 const tpmZeroSince = new Map();  // deviceId → timestamp first detected
 const tpmAlertedSet = new Set();  // deviceId → already alerted
 const tpmHighAlerted = new Set();  // deviceId → high-TPM already alerted
+const tpmLowAlerted = new Set();   // deviceId → low-TPM already alerted
 
 function clearTpmZeroToast(deviceId) { removeToast('tpm-toast-' + deviceId); }
 
 function showTpmToast(pasienName, lokasi, toastKey, message, color) {
   const isPurple = color === 'purple';
+  const isRose   = color === 'rose';
+  const bg = isPurple ? '#faf5ff' : (isRose ? '#fff1f2' : '#fffbeb');
+  const border = isPurple ? '#c084fc' : (isRose ? '#fda4af' : '#fcd34d');
+  const text = isPurple ? '#9333ea' : (isRose ? '#e11d48' : '#d97706');
   const html = toastHTML(
     'speedometer2',
-    isPurple ? '#faf5ff' : '#fffbeb',
-    isPurple ? '#c084fc' : '#fcd34d',
-    isPurple ? '#9333ea' : '#d97706',
+    bg,
+    border,
+    text,
     'TPM Warning',
     escHtml(pasienName),
     escHtml(message),
@@ -503,30 +508,50 @@ function speakTpmAlert(pasienName, lokasi, message) {
   withAudio(() => speak(`Perhatian. Pasien ${pasienName}${lokasiText}. ${message}`));
 }
 
-function handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, online) {
+function handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, online, targetTpm = 20, tpmTol = 5) {
   const t = parseFloat(tpm) || 0;
   const vol = parseFloat(volumeSisa) || 0;
+  const tgt = parseInt(targetTpm) || parseInt(document.body.dataset.targetTpm) || 20;
+  const tol = parseInt(tpmTol) || parseInt(document.body.dataset.tpmTol) || 5;
+  const minTpm = Math.max(1, tgt - tol);
+  const maxTpm = tgt + tol;
 
   // ── Clear all TPM alerts when offline ──
   if (!online) {
     tpmZeroSince.delete(deviceId);
     tpmAlertedSet.delete(deviceId);
     tpmHighAlerted.delete(deviceId);
+    tpmLowAlerted.delete(deviceId);
     clearTpmZeroToast(deviceId);
+    removeToast('tpm-toast-' + deviceId + '-high');
+    removeToast('tpm-toast-' + deviceId + '-low');
     return;
   }
 
-  // ── HIGH TPM alert (>80 tpm = too fast) ──
-  if (t > 80 && vol > 0) {
+  // ── HIGH TPM alert (> maxTpm = too fast) ──
+  if (t > maxTpm && vol > 0) {
     if (!tpmHighAlerted.has(deviceId)) {
       tpmHighAlerted.add(deviceId);
-      const msg = `Tetesan infus terlalu cepat: ${Math.round(t)} tpm. Harap periksa segera.`;
-      showTpmToast(pasienName, lokasi, deviceId + '-high', msg, 'amber');
+      const msg = `Tetesan infus terlalu cepat: ${Math.round(t)} TPM (Target: ${tgt} ± ${tol} TPM). Harap periksa segera.`;
+      showTpmToast(pasienName, lokasi, deviceId + '-high', msg, 'rose');
       speakTpmAlert(pasienName, lokasi, `Tetesan infus terlalu cepat, ${Math.round(t)} tetes per menit. Harap periksa segera.`);
     }
-    return;
   } else {
     tpmHighAlerted.delete(deviceId);
+    removeToast('tpm-toast-' + deviceId + '-high');
+  }
+
+  // ── LOW TPM alert (>0 but < minTpm = too slow) ──
+  if (t > 0 && t < minTpm && vol > 0) {
+    if (!tpmLowAlerted.has(deviceId)) {
+      tpmLowAlerted.add(deviceId);
+      const msg = `Tetesan infus terlalu lambat: ${Math.round(t)} TPM (Target: ${tgt} ± ${tol} TPM). Harap periksa klem infus.`;
+      showTpmToast(pasienName, lokasi, deviceId + '-low', msg, 'amber');
+      speakTpmAlert(pasienName, lokasi, `Tetesan infus terlalu lambat, ${Math.round(t)} tetes per menit. Harap periksa klem infus.`);
+    }
+  } else {
+    tpmLowAlerted.delete(deviceId);
+    removeToast('tpm-toast-' + deviceId + '-low');
   }
 
   // ── LOW / ZERO TPM alert (=0 with fluid remaining = clogged) ──
@@ -538,12 +563,12 @@ function handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, onlin
     const elapsed = Date.now() - tpmZeroSince.get(deviceId);
     if (elapsed >= 10000 && !tpmAlertedSet.has(deviceId)) {
       tpmAlertedSet.add(deviceId);
-      const msg = `Infus kemungkinan macet (0 tpm). Sisa cairan ${Math.round(vol)} ml. Harap periksa segera.`;
+      const msg = `Infus kemungkinan macet (0 TPM). Sisa cairan ${Math.round(vol)} ml. Harap periksa segera.`;
       showTpmToast(pasienName, lokasi, deviceId, msg, 'purple');
       speakTpmAlert(pasienName, lokasi, `Infus macet. Sisa cairan ${Math.round(vol)} mililiter. Harap periksa segera.`);
     }
   } else {
-    // TPM normal — clear state
+    // TPM normal — clear zero state
     tpmZeroSince.delete(deviceId);
     tpmAlertedSet.delete(deviceId);
     clearTpmZeroToast(deviceId);
@@ -578,10 +603,16 @@ async function refreshDetail() {
 
     const pasienName = dev.pasien || document.body.dataset.detailPasien || 'Pasien';
     const lokasi     = dev.lokasi || document.body.dataset.detailLokasi || '';
+    const targetTpm  = parseInt(dev.target_tpm || document.body.dataset.targetTpm || 20);
+    const tpmTol     = parseInt(dev.tpm_tolerance || document.body.dataset.tpmTol || 5);
+    const minTpm     = Math.max(1, targetTpm - tpmTol);
+    const maxTpm     = targetTpm + tpmTol;
 
     // Save to body dataset for quick global access
     document.body.dataset.detailPasien = pasienName;
     document.body.dataset.detailLokasi = lokasi;
+    document.body.dataset.targetTpm    = String(targetTpm);
+    document.body.dataset.tpmTol       = String(tpmTol);
 
     // Simpan lastUpdate ke DOM agar offline-watcher bisa baca
     document.body.dataset.detailLastUpdate = lastUpdate || '';
@@ -590,6 +621,15 @@ async function refreshDetail() {
     const dTpm = document.getElementById('d-tpm');
     const dVol = document.getElementById('d-volume');
     const dEst = document.getElementById('d-estimasi');
+    const dTpmBadge = document.getElementById('d-tpm-badge');
+    const dTpmRange = document.getElementById('d-tpm-range');
+
+    if (dTpmBadge) {
+      dTpmBadge.textContent = `Target: ${targetTpm} ± ${tpmTol}`;
+    }
+    if (dTpmRange) {
+      dTpmRange.textContent = `Rentang: ${minTpm}–${maxTpm}`;
+    }
 
     if (dTpm) {
       dTpm.textContent = Math.round(tpm);
@@ -605,12 +645,19 @@ async function refreshDetail() {
         badge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:900;background:#f3e8ff;color:#9333ea;border:1px solid #d8b4fe;vertical-align:middle;';
         badge.innerHTML = '<i class="bi bi-exclamation-triangle-fill" style="font-size:8px"></i> MACET';
         dTpm.parentElement.appendChild(badge);
-      } else if (online && tpm > 80) {
+      } else if (online && tpm > maxTpm && volumeSisa > 0) {
+        dTpm.style.color = '#e11d48';
+        const badge = document.createElement('span');
+        badge.id = 'd-tpm-warning';
+        badge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:900;background:#fff1f2;color:#e11d48;border:1px solid #fda4af;vertical-align:middle;';
+        badge.innerHTML = '<i class="bi bi-speedometer2" style="font-size:8px"></i> CEPAT';
+        dTpm.parentElement.appendChild(badge);
+      } else if (online && tpm > 0 && tpm < minTpm && volumeSisa > 0) {
         dTpm.style.color = '#d97706';
         const badge = document.createElement('span');
         badge.id = 'd-tpm-warning';
         badge.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:900;background:#fffbeb;color:#d97706;border:1px solid #fcd34d;vertical-align:middle;';
-        badge.innerHTML = '<i class="bi bi-speedometer2" style="font-size:8px"></i> CEPAT';
+        badge.innerHTML = '<i class="bi bi-arrow-down-circle-fill" style="font-size:8px"></i> LAMBAT';
         dTpm.parentElement.appendChild(badge);
       }
     }
@@ -723,7 +770,7 @@ async function refreshDetail() {
 
     handleNurseCallState(deviceId, nurseCall, pasienName, lokasi, online);
     handleLowVolumeAlert(deviceId, persen, volumeSisa, pasienName, lokasi, online);
-    handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, online);
+    handleTpmZeroAlert(deviceId, tpm, volumeSisa, pasienName, lokasi, online, targetTpm, tpmTol);
 
     // --- 8. Fetch Realtime History for Chart Refresh (50 Data) ---
     const histRes  = await fetch(`api/get_history.php?device_id=${encodeURIComponent(deviceId)}&limit=50&_=${Date.now()}`, { cache: 'no-store' });
@@ -814,6 +861,11 @@ function exportExcel() {
   ];
 
   // 2. Isi Data Riwayat
+  const tgtTpm = parseInt(document.body.dataset.targetTpm) || 20;
+  const tolTpm = parseInt(document.body.dataset.tpmTol) || 5;
+  const minT   = Math.max(1, tgtTpm - tolTpm);
+  const maxT   = tgtTpm + tolTpm;
+
   const sortedData = [...cachedHistory].reverse();
   sortedData.forEach((h, idx) => {
     const tpm = parseFloat(h.tpm) || 0;
@@ -826,7 +878,8 @@ function exportExcel() {
     if (vol <= 0) status = 'Habis';
     else if (tpm === 0 && vol > 0) status = 'Macet (0 TPM)';
     else if (pct <= 20) status = 'Hampir Habis';
-    else if (tpm > 80) status = 'Terlalu Cepat';
+    else if (tpm > maxT) status = 'Terlalu Cepat';
+    else if (tpm > 0 && tpm < minT) status = 'Terlalu Lambat';
 
     wsData.push([
       idx + 1,
@@ -1023,6 +1076,11 @@ function exportPDF() {
   });
 
   // ── 4. TABLE LOG DATA (AutoTable) ──
+  const tgtT = parseInt(document.body.dataset.targetTpm) || 20;
+  const tolT = parseInt(document.body.dataset.tpmTol) || 5;
+  const minTVal = Math.max(1, tgtT - tolT);
+  const maxTVal = tgtT + tolT;
+
   const tableRows = sortedData.map((h, idx) => {
     const tpm = parseFloat(h.tpm) || 0;
     const vol = parseFloat(h.volume_sisa) || 0;
@@ -1034,7 +1092,8 @@ function exportPDF() {
     if (vol <= 0) status = 'Habis';
     else if (tpm === 0 && vol > 0) status = 'Macet (0 TPM)';
     else if (pct <= 20) status = 'Hampir Habis';
-    else if (tpm > 80) status = 'Terlalu Cepat';
+    else if (tpm > maxTVal) status = 'Terlalu Cepat';
+    else if (tpm > 0 && tpm < minTVal) status = 'Terlalu Lambat';
 
     return [
       idx + 1,
