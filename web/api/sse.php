@@ -9,18 +9,20 @@
 //   event: ping    → keepalive tiap 15 detik
 // =====================================================
 
-// ── Matikan semua output buffering Apache / PHP ──────
-@apache_setenv('no-gzip', 1);
-@ini_set('zlib.output_compression', 0);
-@ini_set('output_buffering', 0);
-@ini_set('implicit_flush', 1);
+// ── Matikan semua output buffering Apache / Nginx / PHP ──────
+if (function_exists('apache_setenv')) {
+    @apache_setenv('no-gzip', 1);
+}
+@ini_set('zlib.output_compression', '0');
+@ini_set('output_buffering', '0');
+@ini_set('implicit_flush', '1');
 
 while (ob_get_level()) ob_end_clean();
 
-// ── Header SSE ───────────────────────────────────────
+// ── Header SSE (Kompatibel dengan Nginx, LiteSpeed, Cloudflare) ───────
 header('Content-Type: text/event-stream; charset=utf-8');
-header('Cache-Control: no-cache, no-store');
-header('X-Accel-Buffering: no');          // matikan nginx buffering juga
+header('Cache-Control: no-cache, no-store, must-revalidate, no-transform');
+header('X-Accel-Buffering: no');          // Matikan buffering Nginx
 header('Connection: keep-alive');
 header('Access-Control-Allow-Origin: *');
 
@@ -32,6 +34,11 @@ if (pageNeedsLogin('dashboard') && !isLoggedIn()) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized: Silakan login terlebih dahulu']);
     exit;
+}
+
+// WAJIB: Lepas kunci file session PHP agar tidak memblokir request lain di Nginx / PHP-FPM
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
 }
 
 // ── Helper: kirim satu SSE event ─────────────────────
@@ -122,28 +129,34 @@ function snapshotHash(array $rows): string
     return md5($sig);
 }
 
-// ── Batas waktu eksekusi PHP (5 menit, browser reconnect otomatis) ────
-set_time_limit(300);
+// ── Batas waktu eksekusi PHP (3 menit, browser reconnect otomatis) ────
+if (function_exists('set_time_limit')) {
+    @set_time_limit(180);
+}
 
 $db          = getDB();
 $lastHash    = '';
 $lastLogHash = '';
 $lastPing    = time();
-$loopDelay   = 500_000;   // 0.5 detik antar cek DB (microseconds)
+$loopDelay   = 800_000;   // 0.8 detik antar cek DB (hemat beban CPU/MySQL di VPS)
 $_lastOnlineStatus = [];   // Track status online/offline setiap device
 
 // Kirim snapshot awal langsung saat koneksi dibuka
-$snapshot    = fetchSnapshot($db);
-$nurseLog    = fetchNurseLog($db);
-$lastHash    = snapshotHash($snapshot);
-$lastLogHash = md5(json_encode($nurseLog));
+try {
+    $snapshot    = fetchSnapshot($db);
+    $nurseLog    = fetchNurseLog($db);
+    $lastHash    = snapshotHash($snapshot);
+    $lastLogHash = md5(json_encode($nurseLog));
 
-// Initialize online status tracker
-foreach ($snapshot as $dev) {
-    $_lastOnlineStatus[$dev['device_id']] = $dev['is_online'];
+    // Initialize online status tracker
+    foreach ($snapshot as $dev) {
+        $_lastOnlineStatus[$dev['device_id']] = $dev['is_online'];
+    }
+
+    sseEvent('update', ['devices' => $snapshot, 'nurse_log' => $nurseLog]);
+} catch (\Throwable $e) {
+    error_log('SSE Init Snapshot Error: ' . $e->getMessage());
 }
-
-sseEvent('update', ['devices' => $snapshot, 'nurse_log' => $nurseLog]);
 
 // ── Loop utama ────────────────────────────────────────
 while (true) {
