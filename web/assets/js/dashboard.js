@@ -336,7 +336,7 @@ function dismissNurseToast() { removeToast('nurse-toast'); }
 
 const lowVolAlertedSet = new Set();
 
-function handleLowVolumeAlert(deviceId, volumeSisa, pasienName, lokasi, online) {
+function handleLowVolumeAlert(deviceId, persen, volumeSisa, pasienName, lokasi, online) {
   const card = document.getElementById('card-' + deviceId);
 
   if (!online) {
@@ -344,33 +344,40 @@ function handleLowVolumeAlert(deviceId, volumeSisa, pasienName, lokasi, online) 
     removeToast('low-vol-toast-' + deviceId);
     return;
   }
+  const pct = parseFloat(persen) || 0;
   const vol = parseFloat(volumeSisa) || 0;
-  if (vol > 0 && vol <= 20) {
+
+  // Peringatan jika sisa persentase <= 20% (atau sisa <= 20 ml) dan cairan masih ada (> 0)
+  const isLow = (pct > 0 && pct <= 20) || (pct === 0 && vol > 0 && vol <= 20);
+
+  if (isLow && vol > 0) {
     if (!lowVolAlertedSet.has(deviceId)) {
       lowVolAlertedSet.add(deviceId);
-      speakLowVolume(pasienName, lokasi, vol);
-      showLowVolumeToast(pasienName, lokasi, vol, deviceId);
+      speakLowVolume(pasienName, lokasi, vol, pct);
+      showLowVolumeToast(pasienName, lokasi, vol, pct, deviceId);
     }
   } else {
     lowVolAlertedSet.delete(deviceId);
   }
 }
 
-function speakLowVolume(pasienName, lokasi, vol) {
+function speakLowVolume(pasienName, lokasi, vol, pct) {
   if (!window.speechSynthesis) return;
   if (nurseActiveSet.size > 0) return;   // nurse loop sedang jalan, skip
   const lokasiText = lokasi ? ` di ${lokasi}` : '';
+  const pctText = pct > 0 ? ` sisa ${Math.round(pct)} persen,` : '';
   withAudio(() => speak(
-    `Perhatian. Cairan infus pasien ${pasienName}${lokasiText} hampir habis. Sisa ${Math.round(vol)} mililiter. Segera ganti.`
+    `Perhatian. Cairan infus pasien ${pasienName}${lokasiText} hampir habis.${pctText} Tersisa ${Math.round(vol)} mililiter. Segera ganti kantong infus.`
   ));
 }
 
-function showLowVolumeToast(pasienName, lokasi, vol, deviceId) {
+function showLowVolumeToast(pasienName, lokasi, vol, pct, deviceId) {
+  const pctText = pct > 0 ? ` (${Math.round(pct)}%)` : '';
   const html = toastHTML(
     'droplet-half', '#fffbeb', '#fcd34d', '#d97706',
     'Volume Warning',
     escHtml(pasienName),
-    `Sisa <b style="color:#dc2626">${Math.round(vol)} ml</b> — segera ganti!`,
+    `Sisa <b style="color:#dc2626">${Math.round(vol)} ml${pctText}</b> — segera ganti!`,
     escHtml(lokasi || 'Lokasi tidak diketahui'),
     `removeToast('low-vol-toast-${deviceId}')`
   );
@@ -663,7 +670,7 @@ function updateCard(dev) {
   }
 
   handleNurseCallState(dev.device_id, nurseCall, pasienName, lokasi, online);
-  handleLowVolumeAlert(dev.device_id, volumeSisa, pasienName, lokasi, online);
+  handleLowVolumeAlert(dev.device_id, persen, volumeSisa, pasienName, lokasi, online);
   handleTpmZeroAlert(dev.device_id, tpm, volumeSisa, pasienName, lokasi, online);
 }
 

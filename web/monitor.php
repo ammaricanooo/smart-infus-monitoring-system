@@ -415,14 +415,17 @@ foreach ($history as $h) {
       }
 
       const vol = parseFloat(data.volume_sisa || 0);
+      const pct = parseFloat(data.persen || 0);
       const tpm = parseFloat(data.tpm || 0);
 
-      if (vol <= 20 && vol > 0) {
+      const isLow = (pct > 0 && pct <= 20) || (pct === 0 && vol > 0 && vol <= 20);
+
+      if (isLow && vol > 0) {
         card.style.cssText = 'border-color:#fcd34d;background:#fffbeb;';
         icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-amber-100 border border-amber-200 text-amber-600';
         icon.innerHTML = '<i class="bi bi-droplet-half"></i>';
         title.textContent = 'Cairan Hampir Habis';
-        desc.textContent = `Tersisa ${Math.round(vol)} ml. Tim medis akan segera mengganti kantong infus.`;
+        desc.textContent = `Tersisa ${Math.round(vol)} ml${pct > 0 ? ' (' + Math.round(pct) + '%)' : ''}. Tim medis akan segera mengganti kantong infus.`;
       } else if (tpm === 0 && vol > 0) {
         card.style.cssText = 'border-color:#d8b4fe;background:#faf5ff;';
         icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center text-base flex-shrink-0 bg-purple-100 border border-purple-200 text-purple-600';
