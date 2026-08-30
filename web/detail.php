@@ -235,9 +235,14 @@ $activePage = 'dashboard';
           <h3 class="text-sm font-black text-slate-900 tracking-wide uppercase">Log Aliran Transmisi</h3>
           <span class="text-[9px] font-black text-[#6b2072] border border-[#6b2072]/20 bg-[#6b2072]/5 px-2 py-0.5 rounded-md mt-1 inline-block uppercase tracking-wider">10 Data Terkini</span>
         </div>
-        <button onclick="exportCSV()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-600 text-[10px] font-black tracking-wider rounded-xl transition-colors uppercase">
-          <i class="bi bi-download"></i> Export CSV
-        </button>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="exportExcel()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[10px] font-black tracking-wider rounded-xl transition-colors uppercase shadow-sm">
+            <i class="bi bi-file-earmark-excel-fill text-emerald-600"></i> Export Excel
+          </button>
+          <button onclick="exportPDF()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[10px] font-black tracking-wider rounded-xl transition-colors uppercase shadow-sm">
+            <i class="bi bi-file-earmark-pdf-fill text-rose-600"></i> Export PDF Laporan
+          </button>
+        </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full border-collapse text-left">
@@ -288,8 +293,22 @@ $activePage = 'dashboard';
     const chartTPM    = <?= json_encode($chartTPM) ?>;
     const chartVolume = <?= json_encode($chartVolume) ?>;
     const deviceId    = <?= json_encode($device_id) ?>;
+    const deviceMetadata = {
+      deviceId: <?= json_encode($device['device_id']) ?>,
+      namaAlat: <?= json_encode($device['nama']) ?>,
+      pasien: <?= json_encode($device['pasien']) ?>,
+      lokasi: <?= json_encode($device['lokasi']) ?>,
+      mode: <?= json_encode($mode) ?>,
+      volumeAwal: <?= json_encode($volumeAwal) ?>,
+      petugas: <?= json_encode(getCurrentUser()['nama'] ?? 'Petugas Medis') ?>
+    };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- SheetJS for Clean Excel Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF & AutoTable for Medical Report PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="assets/js/detail.js"></script>
 </body>
 </html>

@@ -107,7 +107,7 @@ $defaultDocs = [
               <ul class="list-disc list-inside text-slate-600 space-y-2 text-xs leading-relaxed">
                 <li><strong>Grafik Tren Analisis</strong>: Memvisualisasikan pergerakan laju tetes (TPM) dan sisa volume cairan selama beberapa waktu terakhir.</li>
                 <li><strong>Estimasi Waktu Habis</strong>: Perhitungan matematis otomatis berapa lama sisa cairan infus dapat bertahan berdasarkan laju tetesan saat ini.</li>
-                <li><strong>Ekspor Riwayat (CSV)</strong>: Tombol untuk mengunduh log transmisi aliran infus pasien dalam format file lembar kerja (spreadsheet).</li>
+                <li><strong>Ekspor Riwayat (Excel & PDF Laporan)</strong>: Tombol untuk mengunduh log transmisi aliran infus pasien dalam format file Microsoft Excel (.xlsx) yang rapi serta Lembar Laporan Observasi Medis (.pdf) berstandar klinis.</li>
               </ul>
             </div>
           </div>

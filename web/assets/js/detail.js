@@ -781,35 +781,370 @@ function updateLogTable(data) {
   }).join('');
 }
 
-// ===== EXPORT CSV =====
-function exportCSV() {
-  if (cachedHistory.length === 0) {
-    alert('Belum ada data untuk diekspor.');
+// ===== EXPORT EXCEL (.XLSX) =====
+function exportExcel() {
+  if (!cachedHistory || cachedHistory.length === 0) {
+    alert('Belum ada data riwayat untuk diekspor.');
     return;
   }
 
-  const headers = ['Waktu', 'TPM', 'Volume Sisa (ml)', 'Persen (%)', 'Estimasi Jam', 'Estimasi Menit', 'Nurse Call'];
-  const rows = [...cachedHistory].reverse().map(h => [
-    h.created_at,
-    h.tpm,
-    h.volume_sisa,
-    parseFloat(h.persen).toFixed(1),
-    h.estimasi_jam,
-    h.estimasi_mnt,
-    h.nurse_call ? 'Ya' : 'Tidak',
-  ]);
+  if (typeof XLSX === 'undefined') {
+    alert('Library Excel (SheetJS) belum termuat. Periksa koneksi internet Anda.');
+    return;
+  }
 
-  const csvContent = [headers, ...rows]
-    .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
+  const meta = window.deviceMetadata || {};
+  const pasienName = meta.pasien || document.body.dataset.detailPasien || 'Pasien';
+  const lokasi = meta.lokasi || document.body.dataset.detailLokasi || '-';
+  const devId = meta.deviceId || deviceId;
+  const volAwal = meta.volumeAwal || 500;
+  const petugas = meta.petugas || 'Petugas Medis';
+  const tanggalExport = new Date().toLocaleString('id-ID');
 
-  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `infus_${deviceId}_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  // 1. Data Matrix dengan Header Metadata
+  const wsData = [
+    ['LAPORAN LOG MONITORING INFUS PASIEN'],
+    ['Smart Infus Monitoring System — Clinical Station'],
+    [],
+    ['Nama Pasien:', pasienName, '', 'ID Alat:', devId],
+    ['Lokasi / Ruangan:', lokasi, '', 'Kapasitas Awal:', `${volAwal} ml`],
+    ['Petugas Verifikasi:', petugas, '', 'Waktu Ekspor:', tanggalExport],
+    [],
+    ['No', 'Waktu Transmisi', 'Laju Aliran (TPM)', 'Sisa Volume (ml)', 'Persentase (%)', 'Estimasi Sisa', 'Nurse Call', 'Status Aliran']
+  ];
+
+  // 2. Isi Data Riwayat
+  const sortedData = [...cachedHistory].reverse();
+  sortedData.forEach((h, idx) => {
+    const tpm = parseFloat(h.tpm) || 0;
+    const vol = parseFloat(h.volume_sisa) || 0;
+    const pct = parseFloat(h.persen) || 0;
+    const est = (parseInt(h.estimasi_jam) || 0) + 'j ' + (parseInt(h.estimasi_mnt) || 0) + 'm';
+    const nc = parseInt(h.nurse_call) === 1 ? 'AKTIF' : 'NORMAL';
+
+    let status = 'Normal';
+    if (vol <= 0) status = 'Habis';
+    else if (tpm === 0 && vol > 0) status = 'Macet (0 TPM)';
+    else if (pct <= 20) status = 'Hampir Habis';
+    else if (tpm > 80) status = 'Terlalu Cepat';
+
+    wsData.push([
+      idx + 1,
+      h.created_at,
+      tpm,
+      vol,
+      Number(pct.toFixed(1)),
+      est,
+      nc,
+      status
+    ]);
+  });
+
+  // 3. Buat Worksheet & Workbook
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Set lebar kolom otomatis
+  ws['!cols'] = [
+    { wch: 6 },   // No
+    { wch: 22 },  // Waktu
+    { wch: 18 },  // TPM
+    { wch: 18 },  // Sisa Volume
+    { wch: 16 },  // Persentase
+    { wch: 16 },  // Estimasi
+    { wch: 14 },  // Nurse Call
+    { wch: 18 }   // Status
+  ];
+
+  // Merge Judul di baris 1 & 2
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Log Infus');
+
+  // 4. Download file .xlsx
+  const safeName = pasienName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Laporan_Infus_${safeName}_${dateStr}.xlsx`);
+}
+
+// ===== EXPORT PDF LAPORAN MEDIS =====
+function exportPDF() {
+  if (!cachedHistory || cachedHistory.length === 0) {
+    alert('Belum ada data riwayat untuk diekspor.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf || {};
+  if (!jsPDF) {
+    alert('Library PDF (jsPDF) belum termuat. Periksa koneksi internet Anda.');
+    return;
+  }
+
+  const meta = window.deviceMetadata || {};
+  const pasienName = meta.pasien || document.body.dataset.detailPasien || 'Pasien';
+  const lokasi = meta.lokasi || document.body.dataset.detailLokasi || '-';
+  const devId = meta.deviceId || deviceId;
+  const volAwal = meta.volumeAwal || 500;
+  const petugas = meta.petugas || 'Petugas Medis';
+  const tanggalExport = new Date().toLocaleString('id-ID', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const primaryColor = [107, 32, 114]; // #6b2072 (Deep Purple Brand)
+  const lightBg = [248, 250, 252]; // Slate 50
+
+  // ── 1. HEADER KOP MEDIS ──
+  // Accent Top Bar
+  doc.setFillColor(...primaryColor);
+  doc.rect(0, 0, 210, 6, 'F');
+
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(...primaryColor);
+  doc.text('SMART INFUS MONITORING SYSTEM', 14, 18);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Clinical Station & Realtime Patient Infusion Care Unit', 14, 23);
+
+  // Document Title Badge (Right-aligned)
+  doc.setFillColor(243, 232, 255); // Purple 100
+  doc.roundedRect(125, 11, 71, 14, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...primaryColor);
+  doc.text('LEMBAR OBSERVASI INFUS', 160.5, 17, { align: 'center' });
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Rekam Pemantauan Medis Realtime', 160.5, 21.5, { align: 'center' });
+
+  // Divider line
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.6);
+  doc.line(14, 28, 196, 28);
+
+  // ── 2. PATIENT & DEVICE INFO BOX ──
+  doc.setFillColor(...lightBg);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, 32, 182, 28, 3, 3, 'FD');
+
+  // Left Column
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('NAMA PASIEN', 18, 38);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text(pasienName, 18, 43);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('LOKASI / BED:', 18, 51);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  doc.text(lokasi, 42, 51);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('DEVICE ID:', 18, 56);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  doc.text(devId, 42, 56);
+
+  // Right Column
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('KAPASITAS AWAL:', 110, 38);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  doc.text(`${volAwal} ml (${meta.mode || '-'})`, 145, 38);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('WAKTU CETAK:', 110, 44);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  doc.text(tanggalExport, 145, 44);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('PETUGAS / VERIFIKATOR:', 110, 50);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(51, 65, 85);
+  doc.text(petugas, 148, 50);
+
+  // ── 3. CLINICAL SUMMARY METRICS ──
+  const sortedData = [...cachedHistory].reverse();
+  const latestItem = sortedData[0] || {};
+  const avgTpm = sortedData.length > 0 ? (sortedData.reduce((acc, c) => acc + (parseFloat(c.tpm) || 0), 0) / sortedData.length).toFixed(1) : '0';
+  const lastVol = latestItem.volume_sisa !== undefined ? Math.round(parseFloat(latestItem.volume_sisa)) : '-';
+  const lastPct = latestItem.persen !== undefined ? Math.round(parseFloat(latestItem.persen)) : '-';
+
+  const cardW = 43;
+  const cardH = 15;
+  const cardY = 63;
+  const gap = 3.3;
+
+  const metrics = [
+    { label: 'RATA-RATA LAJU', val: `${avgTpm} TPM`, color: [107, 32, 114] },
+    { label: 'SISA CAIRAN', val: `${lastVol} ml (${lastPct}%)`, color: [16, 185, 129] },
+    { label: 'STATUS TERAKHIR', val: latestItem.tpm === '0' && lastVol > 0 ? 'Macet' : (lastPct <= 20 ? 'Hampir Habis' : 'Lancar Normal'), color: [217, 119, 6] },
+    { label: 'TOTAL LOG SAMPEL', val: `${sortedData.length} Titik`, color: [59, 130, 246] }
+  ];
+
+  metrics.forEach((m, i) => {
+    const cx = 14 + (i * (cardW + gap));
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(cx, cardY, cardW, cardH, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(m.label, cx + 4, cardY + 5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...m.color);
+    doc.text(m.val, cx + 4, cardY + 11.5);
+  });
+
+  // ── 4. TABLE LOG DATA (AutoTable) ──
+  const tableRows = sortedData.map((h, idx) => {
+    const tpm = parseFloat(h.tpm) || 0;
+    const vol = parseFloat(h.volume_sisa) || 0;
+    const pct = parseFloat(h.persen) || 0;
+    const est = (parseInt(h.estimasi_jam) || 0) + 'j ' + (parseInt(h.estimasi_mnt) || 0) + 'm';
+    const nc = parseInt(h.nurse_call) === 1 ? 'AKTIF' : '-';
+
+    let status = 'Normal';
+    if (vol <= 0) status = 'Habis';
+    else if (tpm === 0 && vol > 0) status = 'Macet (0 TPM)';
+    else if (pct <= 20) status = 'Hampir Habis';
+    else if (tpm > 80) status = 'Terlalu Cepat';
+
+    return [
+      idx + 1,
+      h.created_at,
+      Math.round(tpm) + ' TPM',
+      Math.round(vol) + ' ml',
+      pct.toFixed(0) + '%',
+      est,
+      nc,
+      status
+    ];
+  });
+
+  doc.autoTable({
+    startY: 82,
+    head: [['No', 'Waktu Transmisi', 'Laju (TPM)', 'Sisa Vol', 'Persen', 'Estimasi', 'Nurse Call', 'Status Aliran']],
+    body: tableRows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: primaryColor,
+      textColor: [255, 255, 255],
+      fontSize: 8,
+      fontStyle: 'bold',
+      halign: 'center'
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: [30, 41, 59],
+      cellPadding: 2
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { halign: 'center', cellWidth: 34 },
+      2: { halign: 'center', cellWidth: 20 },
+      3: { halign: 'center', cellWidth: 20 },
+      4: { halign: 'center', cellWidth: 18 },
+      5: { halign: 'center', cellWidth: 22 },
+      6: { halign: 'center', cellWidth: 22 },
+      7: { halign: 'center', cellWidth: 36 }
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252]
+    },
+    margin: { left: 14, right: 14, bottom: 35 },
+    didDrawPage: function(data) {
+      // Footer page number
+      const pageCount = doc.internal.getNumberOfPages();
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text(
+        `Halaman ${data.pageNumber} dari ${pageCount} — Dokumen Rahasia Medis Smart Infus System`,
+        14,
+        290
+      );
+      doc.text(
+        `Dicetak otomatis pada: ${tanggalExport}`,
+        196,
+        290,
+        { align: 'right' }
+      );
+    }
+  });
+
+  // ── 5. MEDICAL SIGNATURE & NOTES SECTION ──
+  const finalY = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 120) + 8;
+  const pageHeight = doc.internal.pageSize.height;
+
+  // Cek apakah muat di halaman terakhir atau butuh halaman baru
+  let signY = finalY;
+  if (signY + 30 > pageHeight - 15) {
+    doc.addPage();
+    signY = 20;
+  }
+
+  // Catatan Khusus Box
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(14, signY, 105, 24, 2, 2, 'FD');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 116, 139);
+  doc.text('CATATAN / TINDAKAN PETUGAS MEDIS:', 17, signY + 5);
+  doc.setDrawColor(241, 245, 249);
+  doc.line(17, signY + 11, 115, signY + 11);
+  doc.line(17, signY + 17, 115, signY + 17);
+
+  // Tanda Tangan Box
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(51, 65, 85);
+  const lokasiKota = (lokasi.split('-')[0] || 'Ruang Rawat').trim();
+  doc.text(`${lokasiKota}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`, 150, signY + 5, { align: 'center' });
+  doc.text('Perawat Jaga / Verifikator,', 150, signY + 9, { align: 'center' });
+
+  // Garis tanda tangan
+  doc.setDrawColor(148, 163, 184);
+  doc.line(130, signY + 22, 170, signY + 22);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text(`( ${petugas} )`, 150, signY + 26, { align: 'center' });
+
+  // ── 6. SAVE PDF ──
+  const safeName = pasienName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dateStr = new Date().toISOString().slice(0, 10);
+  doc.save(`Laporan_Infus_${safeName}_${dateStr}.pdf`);
+}
+
+// Fallback jika masih ada yang memanggil exportCSV
+function exportCSV() {
+  exportExcel();
 }
 
 // Realtime loop interval utama (per 5 detik)
