@@ -172,13 +172,16 @@ $activePage = 'dashboard';
         </div>
 
         <!-- Card Estimasi -->
+        <?php
+          $isDetailMacet = $isOnline && ((float)$tpm === 0.0) && ((float)$volumeSisa > 0);
+        ?>
         <div class="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
           <div class="w-10 h-10 bg-purple-50 border border-purple-100 text-purple-500 rounded-xl flex items-center justify-center text-base">
             <i class="bi bi-clock-history"></i>
           </div>
           <div class="mt-4">
-            <div id="d-estimasi" class="text-4xl font-black text-slate-900 tracking-tight"><?= $estJam ?>j <?= $estMnt ?>m</div>
-            <div class="text-[10px] font-black text-purple-600 uppercase tracking-widest mt-1">Estimasi Operasional</div>
+            <div id="d-estimasi" class="text-4xl font-black text-slate-900 tracking-tight"><?= $isDetailMacet ? '<span class="text-purple-600">Terhenti</span>' : "{$estJam}j {$estMnt}m" ?></div>
+            <div class="text-[10px] font-black text-purple-600 uppercase tracking-widest mt-1"><?= $isDetailMacet ? 'Aliran Macet (0 TPM)' : 'Estimasi Operasional' ?></div>
           </div>
         </div>
 

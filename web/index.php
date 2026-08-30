@@ -503,10 +503,13 @@ $activePage = 'dashboard';
             </div>
 
             <!-- Time Frame Remaining Estimates -->
+            <?php
+              $isDevMacet = $isOnline && ((float)($dev['tpm'] ?? 0) === 0.0) && ((float)($dev['volume_sisa'] ?? 0) > 0);
+            ?>
             <div class="bg-slate-50/60 border border-slate-200/40 rounded-xl px-3 py-2 flex items-center justify-between mb-4">
               <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estimasi Sisa Waktu</span>
               <span data-role="estimasi-value" class="text-xs font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200/60 shadow-sm tabular-nums">
-                <?= $dev['estimasi_jam'] ?>j <?= $dev['estimasi_mnt'] ?>m
+                <?= $isDevMacet ? '<i class="bi bi-pause-circle mr-1 text-purple-500"></i><span class="text-purple-700 font-bold">Terhenti</span>' : ($dev['estimasi_jam'] . 'j ' . $dev['estimasi_mnt'] . 'm') ?>
               </span>
             </div>
           </div>
@@ -573,6 +576,13 @@ $activePage = 'dashboard';
                   ($d['persen'] !== null) && $d['persen'] > 0
                 );
                 usort($schedDevs, function($a, $b) {
+                  $isMacetA = (float)($a['tpm'] ?? 0) === 0.0 && (float)($a['volume_sisa'] ?? 0) > 0;
+                  $isMacetB = (float)($b['tpm'] ?? 0) === 0.0 && (float)($b['volume_sisa'] ?? 0) > 0;
+                  if ($isMacetA && !$isMacetB) return 1;
+                  if (!$isMacetA && $isMacetB) return -1;
+                  if ($isMacetA && $isMacetB) {
+                    return ((float)($a['volume_sisa'] ?? 0) <=> (float)($b['volume_sisa'] ?? 0));
+                  }
                   $mA = (int)($a['estimasi_jam'] ?? 0) * 60 + (int)($a['estimasi_mnt'] ?? 0);
                   $mB = (int)($b['estimasi_jam'] ?? 0) * 60 + (int)($b['estimasi_mnt'] ?? 0);
                   return $mA <=> $mB;
@@ -594,26 +604,41 @@ $activePage = 'dashboard';
                   $persen  = (float)($dev['persen'] ?? 0);
                   $vol     = (float)($dev['volume_sisa'] ?? 0);
                   $volAwal = (float)($dev['volume_awal'] ?? 500);
+                  $tpm     = (float)($dev['tpm'] ?? 0);
+                  $isMacet = ($tpm === 0.0 && $vol > 0);
 
-                  // Hitung target waktu penggantian
-                  $targetTs  = time() + $totalMnt * 60;
-                  $targetStr = date('H:i', $targetTs);
-                  $targetDay = date('d/m', $targetTs);
-                  $todayDay  = date('d/m');
-
-                  // Kategori urgensi
-                  if ($totalMnt <= 15) {
-                    $urgency = 'critical';  // merah — harus segera
-                  } elseif ($totalMnt <= 45) {
-                    $urgency = 'warning';   // kuning — siapkan
+                  if ($isMacet) {
+                    $urgency = 'macet';
+                    $estDisplay = '<span class="text-purple-600 font-bold">Terhenti</span>';
+                    $estSub = 'aliran macet (0 TPM)';
+                    $targetDisplay = '<span class="text-slate-400 font-bold">—</span>';
+                    $targetSub = 'aliran terhenti';
                   } else {
-                    $urgency = 'normal';    // hijau — aman
+                    // Hitung target waktu penggantian
+                    $targetTs  = time() + $totalMnt * 60;
+                    $targetStr = date('H:i', $targetTs);
+                    $targetDay = date('d/m', $targetTs);
+                    $todayDay  = date('d/m');
+                    $targetDisplay = $targetStr . ($targetDay !== $todayDay ? ' <span class="text-[10px] text-slate-400 ml-1">' . $targetDay . '</span>' : '');
+                    $estDisplay = ($estJam > 0 ? $estJam . 'j ' : '') . $estMnt . 'm';
+                    $estSub = 'dari sekarang';
+                    $targetSub = 'estimasi habis';
+
+                    // Kategori urgensi
+                    if ($totalMnt <= 15) {
+                      $urgency = 'critical';  // merah — harus segera
+                    } elseif ($totalMnt <= 45) {
+                      $urgency = 'warning';   // kuning — siapkan
+                    } else {
+                      $urgency = 'normal';    // hijau — aman
+                    }
                   }
 
                   $urgencyStyle = match($urgency) {
-                    'critical' => ['bg' => '#fef2f2', 'border' => '#fca5a5', 'text' => '#dc2626', 'badge_bg' => '#fee2e2', 'badge_text' => '#b91c1c', 'label' => 'SEGERA'],
-                    'warning'  => ['bg' => '#fffbeb', 'border' => '#fcd34d', 'text' => '#d97706', 'badge_bg' => '#fef3c7', 'badge_text' => '#92400e', 'label' => 'SIAPKAN'],
-                    default    => ['bg' => '#fff',    'border' => '#e2e8f0', 'text' => '#64748b', 'badge_bg' => '#f0fdf4', 'badge_text' => '#166534', 'label' => 'NORMAL'],
+                    'macet'    => ['bg' => '#faf5ff', 'border' => '#c084fc', 'text' => '#7c3aed', 'badge_bg' => '#f3e8ff', 'badge_text' => '#7c3aed', 'label' => 'MACET', 'icon' => 'exclamation-triangle-fill'],
+                    'critical' => ['bg' => '#fef2f2', 'border' => '#fca5a5', 'text' => '#dc2626', 'badge_bg' => '#fee2e2', 'badge_text' => '#b91c1c', 'label' => 'SEGERA', 'icon' => 'exclamation-triangle-fill'],
+                    'warning'  => ['bg' => '#fffbeb', 'border' => '#fcd34d', 'text' => '#d97706', 'badge_bg' => '#fef3c7', 'badge_text' => '#92400e', 'label' => 'SIAPKAN', 'icon' => 'clock-fill'],
+                    default    => ['bg' => '#fff',    'border' => '#e2e8f0', 'text' => '#64748b', 'badge_bg' => '#f0fdf4', 'badge_text' => '#166534', 'label' => 'NORMAL', 'icon' => 'check-circle-fill'],
                   };
               ?>
               <tr id="sched-row-<?= htmlspecialchars($dev['device_id']) ?>"
@@ -652,33 +677,24 @@ $activePage = 'dashboard';
                 <!-- Estimasi Habis -->
                 <td class="py-3.5 px-5">
                   <div class="text-sm font-black text-slate-900 tabular-nums" data-sched-est="<?= htmlspecialchars($dev['device_id']) ?>">
-                    <?= $estJam > 0 ? $estJam . 'j ' : '' ?><?= $estMnt ?>m
+                    <?= $estDisplay ?>
                   </div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">dari sekarang</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5"><?= $estSub ?></div>
                 </td>
 
                 <!-- Target Waktu -->
                 <td class="py-3.5 px-5">
                   <div class="text-sm font-bold text-slate-900 tabular-nums" data-sched-target="<?= htmlspecialchars($dev['device_id']) ?>">
-                    <?= $targetStr ?>
-                    <?php if ($targetDay !== $todayDay): ?>
-                      <span class="text-[10px] text-slate-400 ml-1"><?= $targetDay ?></span>
-                    <?php endif; ?>
+                    <?= $targetDisplay ?>
                   </div>
-                  <div class="text-[10px] text-slate-400 mt-0.5">estimasi habis</div>
+                  <div class="text-[10px] text-slate-400 mt-0.5"><?= $targetSub ?></div>
                 </td>
 
                 <!-- Status Badge -->
                 <td class="py-3.5 px-5">
                   <span data-sched-badge="<?= htmlspecialchars($dev['device_id']) ?>"
                         style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.04em;background:<?= $urgencyStyle['badge_bg'] ?>;color:<?= $urgencyStyle['badge_text'] ?>;">
-                    <?php if ($urgency === 'critical'): ?>
-                      <i class="bi bi-exclamation-triangle-fill" style="font-size:9px;"></i>
-                    <?php elseif ($urgency === 'warning'): ?>
-                      <i class="bi bi-clock-fill" style="font-size:9px;"></i>
-                    <?php else: ?>
-                      <i class="bi bi-check-circle-fill" style="font-size:9px;"></i>
-                    <?php endif; ?>
+                    <i class="bi bi-<?= $urgencyStyle['icon'] ?>" style="font-size:9px;"></i>
                     <?= $urgencyStyle['label'] ?>
                   </span>
                 </td>
@@ -688,7 +704,7 @@ $activePage = 'dashboard';
                   <a href="detail.php?id=<?= urlencode($dev['device_id']) ?>"
                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95"
                      style="background:#0f172a;color:#fff;">
-                    <i class="bi bi-bar-chart-fill"></i> Detail
+                     <i class="bi bi-bar-chart-fill"></i> Detail
                   </a>
                 </td>
               </tr>
@@ -699,6 +715,9 @@ $activePage = 'dashboard';
 
         <!-- Legend -->
         <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-4 text-[10px] font-bold text-slate-500">
+          <span class="flex items-center gap-1.5">
+            <span style="width:10px;height:10px;border-radius:50%;background:#9333ea;display:inline-block;"></span> Macet (0 TPM) — Periksa aliran
+          </span>
           <span class="flex items-center gap-1.5">
             <span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;"></span> ≤ 15 menit — Segera ganti
           </span>

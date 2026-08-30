@@ -608,7 +608,13 @@ async function refreshDetail() {
       }
     }
     if (dVol) dVol.innerHTML = Math.round(volumeSisa);
-    if (dEst) dEst.textContent = `${estJam}j ${estMnt}m`;
+    if (dEst) {
+      if (online && tpm === 0 && volumeSisa > 0) {
+        dEst.innerHTML = '<span style="color:#9333ea;">Terhenti</span>';
+      } else {
+        dEst.textContent = `${estJam}j ${estMnt}m`;
+      }
+    }
 
     // --- 2. Update Bottle Visual Fluid & Color Level ---
     const bottleFluid = document.getElementById('d-bottle-fluid');

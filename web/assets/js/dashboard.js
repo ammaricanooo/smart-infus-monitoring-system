@@ -585,7 +585,13 @@ function updateCard(dev) {
   if (tpmEl) tpmEl.textContent = Math.round(tpm);
 
   const estEl = card.querySelector('[data-role="estimasi-value"]');
-  if (estEl) estEl.innerHTML = `<i class="bi bi-clock-history mr-1 text-slate-400"></i>${estJam}j ${estMnt}m`;
+  if (estEl) {
+    if (online && tpm === 0 && volumeSisa > 0) {
+      estEl.innerHTML = `<i class="bi bi-pause-circle mr-1 text-purple-500"></i><span class="text-purple-700 font-bold">Terhenti</span>`;
+    } else {
+      estEl.innerHTML = `<i class="bi bi-clock-history mr-1 text-slate-400"></i>${estJam}j ${estMnt}m`;
+    }
+  }
 
   const lastEl = card.querySelector('[data-role="last-update"]');
   if (lastEl) lastEl.innerHTML = `<i class="bi bi-clock-history mr-1"></i>${formatTime(lastUpdate)}`;
@@ -1001,8 +1007,17 @@ function updateSchedule(allData) {
     return;
   }
 
-  // Sort: estimasi total menit terkecil di atas
+  // Sort: running devices first by estimasi total menit terkecil; macet devices at the end
   active.sort((a, b) => {
+    const isMacetA = parseFloat(a.tpm ?? 0) === 0 && parseFloat(a.volume_sisa ?? 0) > 0;
+    const isMacetB = parseFloat(b.tpm ?? 0) === 0 && parseFloat(b.volume_sisa ?? 0) > 0;
+
+    if (isMacetA && !isMacetB) return 1;
+    if (!isMacetA && isMacetB) return -1;
+    if (isMacetA && isMacetB) {
+      return (parseFloat(a.volume_sisa ?? 0) - parseFloat(b.volume_sisa ?? 0));
+    }
+
     const mA = (parseInt(a.estimasi_jam ?? 0) * 60) + parseInt(a.estimasi_mnt ?? 0);
     const mB = (parseInt(b.estimasi_jam ?? 0) * 60) + parseInt(b.estimasi_mnt ?? 0);
     return mA - mB;
@@ -1016,35 +1031,52 @@ function updateSchedule(allData) {
     const total  = estJam * 60 + estMnt;
     const persen = parseFloat(dev.persen ?? 0);
     const vol    = parseFloat(dev.volume_sisa ?? 0);
+    const tpm    = parseFloat(dev.tpm ?? 0);
+    const isMacet = tpm === 0 && vol > 0;
 
-    // Target waktu penggantian
-    const targetDate = new Date(Date.now() + total * 60 * 1000);
-    const targetStr  = `${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}`;
-    const today      = new Date();
-    const isToday    = targetDate.getDate()    === today.getDate()
-                    && targetDate.getMonth()   === today.getMonth()
-                    && targetDate.getFullYear()=== today.getFullYear();
-    const targetDay  = isToday ? ''
-      : `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">${pad(targetDate.getDate())}/${pad(targetDate.getMonth()+1)}</span>`;
-
-    // Urgensi
+    let targetStr, targetDay, estDisplay, estSub, targetSub;
     let urgBg, urgBorder, urgText, urgBadgeBg, urgBadgeText, urgLabel, urgIcon;
-    if (total <= 15) {
-      urgBg = '#fef2f2'; urgBorder = '#fca5a5'; urgText = '#dc2626';
-      urgBadgeBg = '#fee2e2'; urgBadgeText = '#b91c1c';
-      urgLabel = 'SEGERA'; urgIcon = 'exclamation-triangle-fill';
-    } else if (total <= 45) {
-      urgBg = '#fffbeb'; urgBorder = '#fcd34d'; urgText = '#d97706';
-      urgBadgeBg = '#fef3c7'; urgBadgeText = '#92400e';
-      urgLabel = 'SIAPKAN'; urgIcon = 'clock-fill';
+
+    if (isMacet) {
+      urgBg = '#faf5ff'; urgBorder = '#c084fc'; urgText = '#7c3aed';
+      urgBadgeBg = '#f3e8ff'; urgBadgeText = '#7c3aed';
+      urgLabel = 'MACET'; urgIcon = 'exclamation-triangle-fill';
+      estDisplay = '<span style="color:#7c3aed;font-weight:900;">Terhenti</span>';
+      estSub = 'aliran macet (0 TPM)';
+      targetStr = '<span style="color:#94a3b8;font-weight:700;">—</span>';
+      targetDay = '';
+      targetSub = 'aliran terhenti';
     } else {
-      urgBg = '#fff'; urgBorder = '#e2e8f0'; urgText = '#64748b';
-      urgBadgeBg = '#f0fdf4'; urgBadgeText = '#166534';
-      urgLabel = 'NORMAL'; urgIcon = 'check-circle-fill';
+      // Target waktu penggantian
+      const targetDate = new Date(Date.now() + total * 60 * 1000);
+      targetStr  = `${pad(targetDate.getHours())}:${pad(targetDate.getMinutes())}`;
+      const today      = new Date();
+      const isToday    = targetDate.getDate()    === today.getDate()
+                      && targetDate.getMonth()   === today.getMonth()
+                      && targetDate.getFullYear()=== today.getFullYear();
+      targetDay  = isToday ? ''
+        : `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">${pad(targetDate.getDate())}/${pad(targetDate.getMonth()+1)}</span>`;
+      estDisplay  = (estJam > 0 ? estJam + 'j ' : '') + estMnt + 'm';
+      estSub = 'dari sekarang';
+      targetSub = 'estimasi habis';
+
+      // Urgensi
+      if (total <= 15) {
+        urgBg = '#fef2f2'; urgBorder = '#fca5a5'; urgText = '#dc2626';
+        urgBadgeBg = '#fee2e2'; urgBadgeText = '#b91c1c';
+        urgLabel = 'SEGERA'; urgIcon = 'exclamation-triangle-fill';
+      } else if (total <= 45) {
+        urgBg = '#fffbeb'; urgBorder = '#fcd34d'; urgText = '#d97706';
+        urgBadgeBg = '#fef3c7'; urgBadgeText = '#92400e';
+        urgLabel = 'SIAPKAN'; urgIcon = 'clock-fill';
+      } else {
+        urgBg = '#fff'; urgBorder = '#e2e8f0'; urgText = '#64748b';
+        urgBadgeBg = '#f0fdf4'; urgBadgeText = '#166534';
+        urgLabel = 'NORMAL'; urgIcon = 'check-circle-fill';
+      }
     }
 
     const bottleColor = persen > 30 ? '#06b6d4' : (persen > 20 ? '#f59e0b' : '#ef4444');
-    const estDisplay  = (estJam > 0 ? estJam + 'j ' : '') + estMnt + 'm';
 
     return `
       <tr id="sched-row-${escHtml(dev.device_id)}"
@@ -1075,13 +1107,13 @@ function updateSchedule(allData) {
         </td>
         <td style="padding:12px 20px;">
           <div style="font-size:13px;font-weight:900;color:#0f172a;font-variant-numeric:tabular-nums;">${estDisplay}</div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">dari sekarang</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${estSub}</div>
         </td>
         <td style="padding:12px 20px;">
           <div style="font-size:13px;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;">
             ${targetStr}${targetDay}
           </div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">estimasi habis</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:2px;">${targetSub}</div>
         </td>
         <td style="padding:12px 20px;">
           <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:10px;font-weight:900;letter-spacing:.04em;background:${urgBadgeBg};color:${urgBadgeText};">
